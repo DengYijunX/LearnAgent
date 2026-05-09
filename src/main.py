@@ -12,6 +12,13 @@ logger = setup_logging()
 app = FastAPI(title="LearnAgent", version="0.1.0")
 
 
+@app.on_event("startup")
+async def startup():
+    from src.tools.notify import start_scheduler
+    start_scheduler()
+    logger.info("LearnAgent 启动完成")
+
+
 @app.get("/health")
 async def health():
     return {"status": "ok"}
@@ -84,6 +91,8 @@ async def cli_main():
 if __name__ == "__main__":
     if len(sys.argv) > 1 and sys.argv[1] == "server":
         import uvicorn
+        from src.tools.notify import start_scheduler
+        start_scheduler()
         uvicorn.run(app, host="0.0.0.0", port=8000)
     else:
         asyncio.run(cli_main())
