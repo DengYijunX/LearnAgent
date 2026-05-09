@@ -23,7 +23,17 @@ async def learn(user_input: UserInput):
     logger.info("API learn 请求", query=user_input.query[:50])
     decision = await route_task(user_input)
     if decision.task_type == TaskType.COMPLEX:
-        return {"task_type": "complex", "message": "复杂任务支持将在 P1 阶段实现", "reason": decision.reason}
+        from src.agent.plan_execute_agent import build_plan_execute_graph
+        from src.memory.working import create_initial_state
+        graph = build_plan_execute_graph()
+        state = create_initial_state(user_input.query)
+        config = {"configurable": {"thread_id": "learn-session"}}
+        messages = []
+        async for event in graph.astream(state, config):
+            for _, node_output in event.items():
+                msgs = node_output.get("messages", [])
+                messages.extend(msgs)
+        return {"task_type": "complex", "messages": messages, "reason": decision.reason}
     result = await run_react_agent(user_input.query)
     return {"task_type": "simple", "result": result.model_dump()}
 
@@ -50,7 +60,16 @@ async def cli_main():
         print(f"[路由] {decision.task_type.value} — {decision.reason}")
 
         if decision.task_type == TaskType.COMPLEX:
-            print("(复杂任务将在 P1 阶段支持)")
+            from src.agent.plan_execute_agent import build_plan_execute_graph
+            from src.memory.working import create_initial_state
+            graph = build_plan_execute_graph()
+            state = create_initial_state(query)
+            config = {"configurable": {"thread_id": "learn-session"}}
+            async for event in graph.astream(state, config):
+                for _, node_output in event.items():
+                    msgs = node_output.get("messages", [])
+                    for m in msgs:
+                        print(f"\n{m['content']}")
             continue
 
         result = await run_react_agent(query)
