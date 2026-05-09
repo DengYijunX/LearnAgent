@@ -12,8 +12,8 @@ _DEFAULTS = {
         "base_url": "",
     },
     "deepseek": {
-        "simple": "deepseek-chat",
-        "complex": "deepseek-chat",
+        "simple": "deepseek-v4-flash",
+        "complex": "deepseek-v4-pro",
         "base_url": "https://api.deepseek.com",
     },
     "openai": {
