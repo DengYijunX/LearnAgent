@@ -1,5 +1,5 @@
 import json
-from src.memory.user_profile import UserProfile, load_profile, save_profile
+from src.memory.user_profile import load_profile, save_profile
 
 
 def test_load_profile_creates_default(tmp_path):

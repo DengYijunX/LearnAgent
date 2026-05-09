@@ -1,7 +1,6 @@
 import asyncio
 import sys
 from fastapi import FastAPI
-from src.config import settings
 from src.logging_config import setup_logging
 from src.models.schemas import UserInput
 from src.router.router import route_task
@@ -82,7 +81,7 @@ async def cli_main():
         result = await run_react_agent(query)
         print(f"\n📖 {result.topic}")
         print(f"核心概念: {', '.join(result.core_concepts) if result.core_concepts else '无'}")
-        print(f"学习要点:")
+        print("学习要点:")
         for i, point in enumerate(result.learning_points, 1):
             print(f"  {i}. {point}")
         print(f"相关技术: {', '.join(result.related_techs) if result.related_techs else '无'}")

@@ -1,4 +1,4 @@
-from src.memory.working import AgentState, create_initial_state
+from src.memory.working import create_initial_state
 
 
 def test_create_initial_state():

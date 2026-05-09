@@ -12,7 +12,6 @@ def test_graph_builds_successfully():
 @pytest.mark.asyncio
 async def test_graph_plan_node():
     """plan 节点应生成教学计划"""
-    graph = build_plan_execute_graph()
     with patch("src.agent.plan_execute_agent.ChatAnthropic") as MockLLM:
         mock_msg = AsyncMock()
         mock_msg.content = """{"steps": [

@@ -44,7 +44,7 @@ async def search_github_repos(query: str, per_page: int = 5) -> list[dict]:
 
 async def get_github_trending(language: str = "") -> list[dict]:
     """获取 GitHub Trending（按今日创建时间排序的仓库）"""
-    q = f"created:>$(date -d '7 days ago' +%Y-%m-%d)"
+    q = "created:>$(date -d '7 days ago' +%Y-%m-%d)"
     if language:
         q += f" language:{language}"
     return await search_github_repos(q)

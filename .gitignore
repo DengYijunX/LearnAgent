@@ -7,4 +7,5 @@ node_modules/
 .superpowers/
 data/
 projects/
+*.egg-info/
 *.db
