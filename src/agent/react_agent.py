@@ -1,7 +1,6 @@
 import json
-from langchain_anthropic import ChatAnthropic
 from langchain_core.messages import SystemMessage, HumanMessage
-from src.config import settings
+from src.llm import get_llm
 from src.models.schemas import KnowledgeSummary
 from src.tools.web_search import web_search
 from src.tools.content_fetch import fetch_content
@@ -38,11 +37,7 @@ async def run_react_agent(query: str) -> KnowledgeSummary:
 
     # Step 3: Summarize
     try:
-        llm = ChatAnthropic(
-            model=settings.anthropic_model_simple,
-            api_key=settings.anthropic_api_key,
-            max_tokens=1000,
-        )
+        llm = get_llm(model="simple", max_tokens=1000)
         msgs = [
             SystemMessage(content=SUMMARIZE_PROMPT),
             HumanMessage(content=f"用户查询：{query}\n\n搜索资料：{combined_content[:8000] or '未找到相关资料'}"),

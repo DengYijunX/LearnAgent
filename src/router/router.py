@@ -1,7 +1,6 @@
 import json
-from langchain_anthropic import ChatAnthropic
 from langchain_core.messages import SystemMessage, HumanMessage
-from src.config import settings
+from src.llm import get_llm
 from src.models.schemas import UserInput, RouterDecision, TaskType
 from src.logging_config import setup_logging
 
@@ -20,11 +19,7 @@ async def route_task(user_input: UserInput) -> RouterDecision:
     """LLM 驱动的任务路由"""
     logger.debug("router 开始", query=user_input.query[:100])
     try:
-        llm = ChatAnthropic(
-            model=settings.anthropic_model_simple,
-            api_key=settings.anthropic_api_key,
-            max_tokens=200,
-        )
+        llm = get_llm(model="simple", max_tokens=200)
         msgs = [
             SystemMessage(content=ROUTER_PROMPT),
             HumanMessage(content=user_input.query),

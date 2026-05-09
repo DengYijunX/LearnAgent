@@ -2,9 +2,8 @@ import json
 import os
 from langgraph.graph import StateGraph, END
 from langgraph.checkpoint.memory import MemorySaver
-from langchain_anthropic import ChatAnthropic
 from langchain_core.messages import SystemMessage, HumanMessage
-from src.config import settings
+from src.llm import get_llm
 from src.memory.working import AgentState
 from src.tools.filesystem import create_project, write_file
 from src.logging_config import setup_logging
@@ -33,11 +32,7 @@ PLAN_PROMPT = """你是技术教学专家。为用户要学的技术设计渐进
 async def plan_node(state: AgentState) -> dict:
     """制定教学计划"""
     logger.info("plan_node 开始", query=state["user_query"][:50])
-    llm = ChatAnthropic(
-        model=settings.anthropic_model_complex,
-        api_key=settings.anthropic_api_key,
-        max_tokens=4000,
-    )
+    llm = get_llm(model="complex", max_tokens=4000)
     msgs = [
         SystemMessage(content=PLAN_PROMPT),
         HumanMessage(content=f"用户要学：{state['user_query']}"),

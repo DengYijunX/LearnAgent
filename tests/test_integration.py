@@ -15,15 +15,15 @@ def test_health():
 @pytest.mark.asyncio
 async def test_learn_endpoint_simple_task():
     """模拟简单任务全链路"""
-    with patch("src.router.router.ChatAnthropic") as RouterLLM:
+    with patch("src.router.router.get_llm") as mock_router_llm:
         router_msg = AsyncMock()
         router_msg.content = '{"task_type": "simple", "reason": "查询概念"}'
-        RouterLLM.return_value.ainvoke = AsyncMock(return_value=router_msg)
+        mock_router_llm.return_value.ainvoke = AsyncMock(return_value=router_msg)
 
-        with patch("src.agent.react_agent.ChatAnthropic") as ReactLLM:
+        with patch("src.agent.react_agent.get_llm") as mock_react_llm:
             react_msg = AsyncMock()
             react_msg.content = '{"topic": "RAG", "core_concepts": ["检索", "增强"], "learning_points": ["第一步"], "related_techs": []}'
-            ReactLLM.return_value.ainvoke = AsyncMock(return_value=react_msg)
+            mock_react_llm.return_value.ainvoke = AsyncMock(return_value=react_msg)
 
             with patch("src.agent.react_agent.web_search") as mock_search:
                 mock_search.return_value = [{"title": "t", "url": "http://x.com", "content": "c"}]
