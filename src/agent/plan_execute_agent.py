@@ -97,8 +97,39 @@ def should_continue(state: AgentState) -> str:
     return "summarize" if current >= total else "execute"
 
 
-def build_plan_execute_graph():
+def build_plan_execute_graph(memory_manager=None):
     """构建 Plan-then-Execute 的 LangGraph 图"""
+
+    async def summarize_node(state: AgentState) -> dict:
+        """教学完成后的总结 + 自动保存记忆"""
+        topic = state["user_query"]
+        plan = state.get("plan", {})
+        steps = plan.get("steps", [])
+
+        # Auto-save to memory (non-blocking)
+        if memory_manager:
+            try:
+                from src.models.schemas import KnowledgeSummary
+                summary = KnowledgeSummary(
+                    topic=topic,
+                    core_concepts=[],
+                    learning_points=[s["title"] for s in steps],
+                    related_techs=[],
+                )
+                memory_manager.save_learning(topic, summary, source="plan_execute")
+                memory_manager.update_profile(topic)
+                memory_manager.log_plan_execute_complete(
+                    project_dir=state.get("project_dir", ""),
+                    generated_files=list(state.get("plan", {}).get("steps", [{}])[0].get("files", {}).keys()) if steps else [],
+                    step_count=len(steps),
+                )
+            except Exception as e:
+                logger.warning("Memory auto-save failed in plan_execute", error=str(e))
+
+        return {
+            "messages": [{"role": "assistant", "content": "教学项目已全部完成！你可以运行项目查看效果。"}],
+        }
+
     builder = StateGraph(AgentState)
     builder.add_node("plan", plan_node)
     builder.add_node("execute", execute_node)

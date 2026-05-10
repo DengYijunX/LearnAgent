@@ -57,7 +57,13 @@ agent/
     │   ├── test_content_fetch.py
     │   ├── test_github_disco.py
     │   ├── test_filesystem.py
-    │   └── test_notify.py
+    │   ├── test_notify.py
+    │   ├── test_web_search_integration.py
+    │   ├── test_content_fetch_integration.py
+    │   ├── test_github_disco_integration.py
+    │   ├── test_router_integration.py
+    │   ├── test_react_agent_integration.py
+    │   └── test_slack_integration.py
     └── test_memory/
         ├── __init__.py
         ├── test_working.py
@@ -1246,6 +1252,178 @@ async def test_learn_endpoint_simple_task():
 ```bash
 git add tests/test_integration.py
 git commit -m "添加 P0 集成测试：健康检查 + 学习接口全链路 Mock 验证"
+```
+
+---
+
+---
+### 任务 12.5：P0 真实 API 集成测试（需 .env 配置好所有 Key）
+
+**文件：**
+- 创建：`tests/test_tools/test_web_search_integration.py`
+- 创建：`tests/test_tools/test_content_fetch_integration.py`
+- 创建：`tests/test_tools/test_github_disco_integration.py`
+- 创建：`tests/test_router_integration.py`
+- 创建：`tests/test_react_agent_integration.py`
+
+> **注意：** 这些测试依赖真实的 API Key，执行前确保 `.env` 中 `TAVILY_API_KEY`、`ANTHROPIC_API_KEY`、`GITHUB_TOKEN`（可选）已配置。使用 `@pytest.mark.integration` 标记，默认 `pytest` 跳过，`make test-integration` 执行。
+
+- [ ] **步骤 1：Tavily 真实搜索集成测试**
+
+```python
+import pytest
+from src.tools.web_search import web_search
+
+
+@pytest.mark.integration
+@pytest.mark.asyncio
+async def test_web_search_real_api():
+    """真实 API：搜索应返回非空结果，且有正确的字段"""
+    results = await web_search("AI Agent framework 2026", max_results=3)
+    assert len(results) > 0, "Tavily 应返回至少 1 个结果"
+    for r in results:
+        assert "title" in r
+        assert "url" in r
+        assert "content" in r
+        assert len(r["title"]) > 0
+
+
+@pytest.mark.integration
+@pytest.mark.asyncio
+async def test_web_search_chinese_query():
+    """真实 API：中文搜索"""
+    results = await web_search("LangGraph 教程", max_results=3)
+    assert len(results) > 0
+```
+
+- [ ] **步骤 2：Jina Reader 真实抓取集成测试**
+
+```python
+import pytest
+from src.tools.content_fetch import fetch_content
+
+
+@pytest.mark.integration
+@pytest.mark.asyncio
+async def test_fetch_content_real_url():
+    """真实 API：抓取公开网页"""
+    result = await fetch_content("https://docs.python.org/3/library/asyncio.html")
+    assert len(result.content) > 200, "应抓取到有效内容"
+    assert "asyncio" in result.content.lower()
+
+
+@pytest.mark.integration
+@pytest.mark.asyncio
+async def test_fetch_content_github_readme():
+    """真实 API：抓取 GitHub README（Jina 能直接返回 Markdown）"""
+    result = await fetch_content("https://github.com/langchain-ai/langgraph")
+    assert len(result.content) > 100
+```
+
+- [ ] **步骤 3：GitHub 真实搜索集成测试**
+
+```python
+import pytest
+from src.tools.github_disco import search_github_repos
+
+
+@pytest.mark.integration
+@pytest.mark.asyncio
+async def test_search_github_repos_real():
+    """真实 API：搜索 GitHub 仓库"""
+    results = await search_github_repos("langgraph agent", per_page=3)
+    assert len(results) > 0, "应找到相关仓库"
+    assert "full_name" in results[0]
+    assert "html_url" in results[0]
+```
+
+- [ ] **步骤 4：Router 真实 LLM 集成测试**
+
+```python
+import pytest
+from src.router.router import route_task
+from src.models.schemas import UserInput, TaskType
+
+
+@pytest.mark.integration
+@pytest.mark.asyncio
+async def test_route_real_llm_keyword_to_simple():
+    """真实 LLM：技术名词查询应路由为 simple"""
+    decision = await route_task(UserInput(query="什么是向量数据库"))
+    assert decision.task_type == TaskType.SIMPLE
+    assert len(decision.reason) > 0
+
+
+@pytest.mark.integration
+@pytest.mark.asyncio
+async def test_route_real_llm_learn_to_complex():
+    """真实 LLM：'我要学 X' 应路由为 complex"""
+    decision = await route_task(UserInput(query="我要学 Redis，帮我做个教学项目"))
+    assert decision.task_type == TaskType.COMPLEX
+
+
+@pytest.mark.integration
+@pytest.mark.asyncio
+async def test_route_real_llm_various_queries():
+    """真实 LLM：批量测试不同类型的输入，确保 Router 稳定性"""
+    cases = [
+        ("什么是 Docker", TaskType.SIMPLE),
+        ("解释一下 React hooks 的原理", TaskType.SIMPLE),
+        ("帮我掌握 FastAPI", TaskType.COMPLEX),
+        ("教我学 LangGraph，从零开始", TaskType.COMPLEX),
+        ("RAG 和 Agent 有什么区别", TaskType.SIMPLE),
+        ("带我做一个小型的 agent 项目", TaskType.COMPLEX),
+    ]
+    for query, expected in cases:
+        decision = await route_task(UserInput(query=query))
+        assert decision.task_type == expected, f"query='{query}' 路由错误: {decision.reason}"
+```
+
+- [ ] **步骤 5：ReAct Agent 真实全链路集成测试**
+
+```python
+import pytest
+from src.agent.react_agent import run_react_agent
+
+
+@pytest.mark.integration
+@pytest.mark.asyncio
+async def test_react_agent_real_full_chain():
+    """真实全链路：搜索 → 抓取 → LLM 总结"""
+    result = await run_react_agent("什么是容器化 Docker")
+    assert result.topic, "应返回 topic"
+    assert len(result.core_concepts) > 0, "应有核心概念"
+    assert len(result.learning_points) > 0, "应有学习要点"
+
+
+@pytest.mark.integration
+@pytest.mark.asyncio
+async def test_react_agent_real_chinese_topic():
+    """真实全链路：中文技术查询"""
+    result = await run_react_agent("Python asyncio 异步编程")
+    assert len(result.learning_points) >= 2
+    # 相关技术应包含概念关联的词汇
+    related = " ".join(result.related_techs).lower()
+    assert any(w in related for w in ["async", "await", "协程", "事件循环"])
+```
+
+- [ ] **步骤 6：运行集成测试**
+
+```bash
+make test-integration
+```
+
+预期：全部 PASS（8-12 个测试，取决于网络和 API 配额）
+
+- [ ] **步骤 7：提交**
+
+```bash
+git add tests/test_tools/test_web_search_integration.py \
+        tests/test_tools/test_content_fetch_integration.py \
+        tests/test_tools/test_github_disco_integration.py \
+        tests/test_router_integration.py \
+        tests/test_react_agent_integration.py
+git commit -m "添加 P0 真实 API 集成测试：Tavily / Jina / GitHub / Router / ReAct 全链路"
 ```
 
 ---

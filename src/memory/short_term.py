@@ -1,9 +1,15 @@
 import os
 import uuid
-import aiosqlite
+import warnings
 from src.logging_config import setup_logging
 
 logger = setup_logging()
+
+warnings.warn(
+    "ShortTermMemory is deprecated since v1.1. Use MemoryManager/IndexManager/LearningRecorder instead.",
+    DeprecationWarning,
+    stacklevel=2,
+)
 
 # ChromaDB 导入可能因 onnxruntime 在 Windows 上崩溃，设为可选
 _chromadb_available = False
@@ -23,7 +29,7 @@ class ShortTermMemory:
 
     async def initialize(self):
         os.makedirs(os.path.dirname(self.sqlite_path), exist_ok=True)
-        self.db = await aiosqlite.connect(self.sqlite_path)
+        self.db = await aiosqlite.connect(self.sqlite_path)  # noqa: F821 (deprecated模块)
         await self.db.execute("""
             CREATE TABLE IF NOT EXISTS memories (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
