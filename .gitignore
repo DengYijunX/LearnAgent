@@ -10,3 +10,4 @@ projects/
 artifacts/
 *.egg-info/
 *.db
+plans/
