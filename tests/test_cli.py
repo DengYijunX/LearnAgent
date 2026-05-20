@@ -9,6 +9,7 @@ def test_build_default_tool_registry_registers_stage_one_mock_tools():
     assert registry.find("search_web") is not None
     assert registry.find("read_url") is not None
     assert registry.find("github_repo_analyzer") is not None
+    assert registry.find("learning_todo_write") is not None
 
 
 @pytest.mark.asyncio
