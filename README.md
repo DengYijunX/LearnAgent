@@ -30,13 +30,23 @@ RUN_REAL_TESTS=0
 
 DeepSeek 的实际 model ID 必须来自服务商配置，不应硬编码在 workflow、agent loop 或 tool 代码中。
 
-## 计划中的命令
+## 可用命令
 
-随着实现推进，以下命令会逐步可用：
+运行 mock 模式 CLI：
 
 ```powershell
 python -m app.main
+```
+
+运行单元测试：
+
+```powershell
 python -m pytest
+```
+
+手动验证真实 DeepSeek API：
+
+```powershell
 python scripts/smoke_llm_real.py
 ```
 
