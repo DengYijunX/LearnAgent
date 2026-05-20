@@ -50,4 +50,10 @@ python -m pytest
 python scripts/smoke_llm_real.py
 ```
 
+手动验证真实 DeepSeek LLM + mock tools 的最小 Agent 闭环：
+
+```powershell
+python scripts/smoke_agent_real.py
+```
+
 真实集成测试和 smoke script 只有在 `RUN_REAL_TESTS=1` 且必要 API key 已配置时，才应调用外部服务。

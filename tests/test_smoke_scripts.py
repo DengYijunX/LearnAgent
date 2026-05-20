@@ -20,3 +20,21 @@ def test_smoke_llm_real_script_skips_without_real_test_flag():
 
     assert result.returncode == 0
     assert "跳过真实 LLM smoke test" in result.stdout
+
+
+def test_smoke_agent_real_script_skips_without_real_test_flag():
+    root = Path(__file__).resolve().parents[1]
+    env = os.environ.copy()
+    env["RUN_REAL_TESTS"] = "0"
+
+    result = subprocess.run(
+        [sys.executable, str(root / "scripts" / "smoke_agent_real.py")],
+        cwd=root,
+        env=env,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 0
+    assert "跳过真实 Agent smoke test" in result.stdout
