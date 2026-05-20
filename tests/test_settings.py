@@ -11,7 +11,7 @@ def test_load_settings_reads_deepseek_environment(monkeypatch):
     monkeypatch.setenv("LLM_MAX_TOKENS", "4096")
     monkeypatch.setenv("RUN_REAL_TESTS", "1")
 
-    settings = load_settings()
+    settings = load_settings(dotenv_path="__missing__.env")
 
     assert settings.deepseek_api_key == "test-key"
     assert settings.deepseek_base_url == "https://api.example.test/v1"
@@ -36,7 +36,7 @@ def test_settings_defaults_do_not_guess_model_ids(monkeypatch):
     ):
         monkeypatch.delenv(name, raising=False)
 
-    settings = load_settings()
+    settings = load_settings(dotenv_path="__missing__.env")
 
     assert settings == Settings()
     assert settings.deepseek_small_model == ""
