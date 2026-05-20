@@ -1,177 +1,177 @@
-# Architecture Decision Records
+# 架构决策记录
 
-## Decision 001: Stage 1 Uses CLI First
+## Decision 001：第一阶段采用 CLI First
 
-Date: 2026-05-20
+日期：2026-05-20
 
-Status: Accepted
+状态：Accepted
 
-Context:
+背景：
 
-The first stage should validate LearnAgent's core runtime before adding HTTP APIs or frontend complexity.
+第一阶段需要先验证 LearnAgent 的核心运行时，不应过早引入 HTTP API 或前端复杂度。
 
-Decision:
+决策：
 
-Build a Python CLI-first minimum viable version. FastAPI, Flask, and frontend work are deferred.
+构建 Python CLI first 的最小可运行版本。FastAPI、Flask 和前端工作后置。
 
-Rationale:
+理由：
 
-CLI keeps the initial loop small and makes Router, Tool Layer, LLM Client, Workflow, Memory, and tests easier to validate. Future API entrypoints should reuse the same core workflow.
+CLI 能让初始闭环保持足够小，也更容易验证 Router、Tool Layer、LLM Client、Workflow、Memory 和测试。后续 API 入口应复用同一套核心 workflow。
 
-Impact:
+影响：
 
-The CLI must stay thin. Core agent logic must live outside the CLI entrypoint so a later API can reuse it.
+CLI 必须保持轻量。核心 Agent 逻辑应放在 CLI 入口之外，方便后续 API 复用。
 
-## Decision 002: DeepSeek Via OpenAI-Compatible API
+## Decision 002：DeepSeek 通过 OpenAI-Compatible API 接入
 
-Date: 2026-05-20
+日期：2026-05-20
 
-Status: Accepted
+状态：Accepted
 
-Context:
+背景：
 
-LearnAgent needs a real LLM provider early, while preserving the ability to switch providers later.
+LearnAgent 需要尽早接入真实 LLM，同时保留后续切换服务商的能力。
 
-Decision:
+决策：
 
-Use DeepSeek as the primary stage 1 provider through an OpenAI-compatible API. Provide both `MockLLMClient` and `DeepSeekLLMClient`.
+第一阶段使用 DeepSeek 作为主要 LLM 服务商，并通过 OpenAI-compatible API 接入。提供 `MockLLMClient` 和 `DeepSeekLLMClient` 两种实现。
 
-Rationale:
+理由：
 
-An OpenAI-compatible adapter keeps workflow code independent from provider details. Unit tests can use mock clients, while smoke scripts can validate real DeepSeek access.
+OpenAI-compatible adapter 可以让 workflow 代码不依赖具体服务商细节。单元测试使用 mock client，smoke script 用于验证真实 DeepSeek 接入。
 
-Impact:
+影响：
 
-Business code must call LLMs only through the LLM client abstraction. It must not call HTTP APIs directly.
+业务代码只能通过 LLM client 抽象调用模型，不能直接调用 HTTP API。
 
-## Decision 003: Model IDs Are Configuration
+## Decision 003：模型 ID 必须来自配置
 
-Date: 2026-05-20
+日期：2026-05-20
 
-Status: Accepted
+状态：Accepted
 
-Context:
+背景：
 
-DeepSeek V4 Flash and DeepSeek V4 Pro model IDs must match the actual provider platform names.
+DeepSeek V4 Flash 和 DeepSeek V4 Pro 的 model ID 必须以实际服务平台提供的名称为准。
 
-Decision:
+决策：
 
-Keep model names in `.env` and the config module. `.env.example` exposes `DEEPSEEK_SMALL_MODEL` and `DEEPSEEK_LARGE_MODEL`.
+模型名保存在 `.env` 和 config 模块中。`.env.example` 提供 `DEEPSEEK_SMALL_MODEL` 和 `DEEPSEEK_LARGE_MODEL` 配置项。
 
-Rationale:
+理由：
 
-Provider model IDs may vary. Hardcoding them in workflow, tools, or agent loop would make future changes risky.
+不同平台的模型 ID 可能变化。如果在 workflow、tools 或 agent loop 中硬编码，会增加后续修改风险。
 
-Impact:
+影响：
 
-Workflow and tools must request model selection by task or mode, not by concrete model string.
+Workflow 和 tools 应按任务或模式请求模型选择，而不是直接依赖具体模型字符串。
 
-## Decision 004: Simple ModelSelector In Stage 1
+## Decision 004：第一阶段实现简单 ModelSelector
 
-Date: 2026-05-20
+日期：2026-05-20
 
-Status: Accepted
+状态：Accepted
 
-Context:
+背景：
 
-LearnAgent needs small and large model routing without complex multi-model orchestration.
+LearnAgent 需要支持 small model 和 large model 的简单路由，但不需要复杂多模型编排。
 
-Decision:
+决策：
 
-Implement a simple rule-based ModelSelector. `normal`, `summary`, and `lightweight` use the small model. `deep`, `planning`, and `repo_analysis` use the large model.
+实现简单规则型 ModelSelector。`normal`、`summary`、`lightweight` 使用 small model；`deep`、`planning`、`repo_analysis` 使用 large model。
 
-Rationale:
+理由：
 
-This supports the confirmed DeepSeek strategy while keeping stage 1 implementation straightforward and testable.
+这能满足已确认的 DeepSeek 策略，同时保持第一阶段实现简单、可测试。
 
-Impact:
+影响：
 
-Workflow should depend on ModelSelector instead of embedding provider-specific model names.
+Workflow 应依赖 ModelSelector，而不是内嵌服务商模型名。
 
-## Decision 005: Mock Web Search And GitHub Analyzer In Stage 1
+## Decision 005：第一阶段使用 Mock Web Search 和 Mock GitHub Analyzer
 
-Date: 2026-05-20
+日期：2026-05-20
 
-Status: Accepted
+状态：Accepted
 
-Context:
+背景：
 
-Search and GitHub analysis are important, but real external integrations bring provider choice, credentials, rate limits, parsing quality, and token-budget concerns.
+搜索和 GitHub 分析很重要，但真实外部接入会带来服务商选择、凭据、限流、解析质量和 token 预算等问题。
 
-Decision:
+决策：
 
-Stage 1 defines replaceable tool interfaces and mock implementations. Real Web Search and GitHub API integration are deferred.
+第一阶段定义可替换的 tool 接口和 mock 实现。真实 Web Search 和 GitHub API 接入后置。
 
-Rationale:
+理由：
 
-This validates architecture without committing to search APIs or GitHub credentials too early.
+这样可以先验证系统架构，不会过早绑定搜索 API 或 GitHub 凭据。
 
-Impact:
+影响：
 
-Workflow must depend on Tool interfaces and ToolRegistry, not concrete mock classes. Real implementations can be added later after confirmation.
+Workflow 必须依赖 Tool 接口和 ToolRegistry，而不是具体 mock 类。真实实现应在后续确认后再加入。
 
-## Decision 006: Local Session And Memory Storage
+## Decision 006：本地 Session 和 Memory 存储
 
-Date: 2026-05-20
+日期：2026-05-20
 
-Status: Accepted
+状态：Accepted
 
-Context:
+背景：
 
-LearnAgent needs local debug traces and long-term learning memory, but should not introduce a database in stage 1.
+LearnAgent 需要本地 debug trace 和长期学习记忆，但第一阶段不应引入数据库。
 
-Decision:
+决策：
 
-Use JSONL for sessions and workflow traces, and Markdown with frontmatter for long-term memory. Store local data under `storage/sessions/`, `storage/runs/`, and `storage/memory/`.
+Session 和 workflow trace 使用 JSONL；长期 memory 使用 Markdown + frontmatter。本地数据存放在 `storage/sessions/`、`storage/runs/` 和 `storage/memory/`。
 
-Rationale:
+理由：
 
-JSONL is append-friendly and good for debugging. Markdown memory is human-readable and easy to review.
+JSONL 适合追加写入，也便于调试。Markdown memory 可读、可编辑，适合人工检查。
 
-Impact:
+影响：
 
-`storage/` is ignored by Git. User learning records, run traces, LLM responses, and local memory files must not be committed.
+`storage/` 由 Git 忽略。用户学习记录、run trace、LLM 响应和本地 memory 文件不得提交。
 
-## Decision 007: Test Boundaries
+## Decision 007：测试边界
 
-Date: 2026-05-20
+日期：2026-05-20
 
-Status: Accepted
+状态：Accepted
 
-Context:
+背景：
 
-The project needs reliable tests while avoiding accidental API usage.
+项目需要可靠测试，同时避免意外调用真实 API。
 
-Decision:
+决策：
 
-Use pytest. Unit tests default to mock LLMs and mock tools. Real integration tests and smoke scripts run only when explicitly enabled with `RUN_REAL_TESTS=1` and required credentials.
+使用 pytest。单元测试默认使用 mock LLM 和 mock tools。真实集成测试与 smoke script 只有在显式设置 `RUN_REAL_TESTS=1` 且必要凭据存在时才运行。
 
-Rationale:
+理由：
 
-This keeps normal test runs fast, deterministic, and free of API cost.
+这样可以让常规测试保持快速、确定，并避免 API 成本。
 
-Impact:
+影响：
 
-Real LLM validation should be provided by `scripts/smoke_llm_real.py` once the LLM client is implemented.
+LLM client 实现后，应通过 `scripts/smoke_llm_real.py` 验证真实 LLM 接入。
 
-## Decision 008: JSON Action Fallback For Tool Calling
+## Decision 008：Tool Calling 的 JSON Action Fallback
 
-Date: 2026-05-20
+日期：2026-05-20
 
-Status: Accepted
+状态：Accepted
 
-Context:
+背景：
 
-DeepSeek tool calling behavior may vary across model versions and API surfaces.
+DeepSeek 的 tool calling 行为可能随模型版本和 API 形态不同而变化。
 
-Decision:
+决策：
 
-Stage 1 may support JSON action output as a fallback to standard tool calling.
+第一阶段可以支持 JSON action 输出，作为标准 tool calling 的 fallback。
 
-Rationale:
+理由：
 
-JSON action fallback lets the agent loop validate tool selection even if native tool calling is unstable.
+即使原生 tool calling 不稳定，JSON action fallback 也能让 agent loop 验证工具选择流程。
 
-Impact:
+影响：
 
-Tool call parsing differences should be isolated in the LLM client or agent-loop boundary, not spread through business workflow code.
+工具调用格式差异应隔离在 LLM client 或 agent loop 边界中，不应扩散到业务 workflow 代码里。
