@@ -36,6 +36,13 @@ DeepSeek 的实际 model ID 必须来自服务商配置，不应硬编码在 wor
 
 ```powershell
 python -m app.main
+python -m app.main "我想学习 LangGraph"
+```
+
+运行真实 DeepSeek CLI：
+
+```powershell
+python -m app.main --real --mode normal "我想学习 LangGraph"
 ```
 
 运行单元测试：

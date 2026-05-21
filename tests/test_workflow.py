@@ -79,6 +79,24 @@ async def test_workflow_passes_session_context_to_todo_tool(tmp_path):
     assert todo_store.load("session-2")[0].content == "理解 LangGraph"
 
 
+@pytest.mark.asyncio
+async def test_workflow_uses_model_mode_override(tmp_path):
+    registry = ToolRegistry()
+    llm = RecordingLLMClient()
+    workflow = LearnWorkflow(
+        llm=llm,
+        tools=registry,
+        session_store=SessionStore(tmp_path / "sessions"),
+        memory_store=MemoryStore(tmp_path / "memory"),
+        session_id="session-3",
+        model_mode="deep",
+    )
+
+    await workflow.run("我想学习 LangGraph")
+
+    assert llm.requests[0].mode == "deep"
+
+
 class SequencedWorkflowLLM:
     def __init__(self, responses):
         self._responses = list(responses)

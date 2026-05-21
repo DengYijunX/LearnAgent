@@ -35,6 +35,7 @@ class LearnWorkflow:
         memory_store: MemoryStore,
         session_id: str | None = None,
         router: InputRouter | None = None,
+        model_mode: str | None = None,
     ):
         self.llm = llm
         self.tools = tools
@@ -42,6 +43,7 @@ class LearnWorkflow:
         self.memory_store = memory_store
         self.session_id = session_id or f"session-{uuid4().hex[:12]}"
         self.router = router or InputRouter()
+        self.model_mode = model_mode
 
     async def run(self, user_input: str) -> WorkflowResult:
         route = self.router.route(user_input)
@@ -64,7 +66,7 @@ class LearnWorkflow:
             tools=self.tools,
             messages=[{"role": "user", "content": user_input}],
             system_prompt=_build_system_prompt(route.intent),
-            mode=_mode_for_intent(route.intent),
+            mode=self.model_mode or _mode_for_intent(route.intent),
             tool_context={
                 "session_id": self.session_id,
                 "current_topic": route.topic,
