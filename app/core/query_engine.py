@@ -41,11 +41,15 @@ class LearnQueryEngine:
         self.session_id = uuid.uuid4().hex[:12]
         self.current_topic: str | None = None
         self._ask_callback = None
+        self._on_event = None
         self._skills: dict[str, dict] = {}
         self._load_skills(skills_dir)
 
     def set_ask_callback(self, callback):
         self._ask_callback = callback
+
+    def set_on_event(self, callback):
+        self._on_event = callback
 
     def _load_skills(self, skills_dir: str | None):
         if not skills_dir or not os.path.isdir(skills_dir):
@@ -93,7 +97,8 @@ class LearnQueryEngine:
             tools=self.tools,
             system=system_prompt,
             max_turns=8,
-            ask_callback=self._ask_callback if hasattr(self, "_ask_callback") else None,
+            ask_callback=self._ask_callback if self._ask_callback else None,
+            on_event=self._on_event if self._on_event else None,
         )
 
         if self.session_store:

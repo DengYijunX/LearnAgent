@@ -6,8 +6,10 @@
 """
 
 import asyncio
+import json
 import os
 import sys
+import time
 
 from app.config.settings import get_config
 from app.llm.mock_client import MockLLMClient
@@ -76,21 +78,82 @@ def build_engine(use_real: bool = False):
     )
 
 
-async def ask_permission(tool_name: str, reason: str) -> bool:
-    """CLI 交互式权限确认。"""
-    print(f"\n[权限] 工具 {tool_name} 需要确认：{reason}")
+async def ask_permission(tool_name: str, reason: str, tool_input: dict | None = None) -> bool:
+    """CLI 交互式权限确认，显示工具参数。"""
+    print(f"\n[权限] {tool_name} 请求执行")
+    print(f"  原因：{reason}")
+    if tool_input:
+        # 显示关键参数（截断长内容）
+        for k, v in tool_input.items():
+            v_str = str(v)
+            if len(v_str) > 80:
+                v_str = v_str[:80] + "..."
+            print(f"  {k}: {v_str}")
     try:
-        answer = input("  允许执行？(y/n): ").strip().lower()
+        answer = input("  允许？(y/n，默认 y): ").strip().lower()
         return answer in ("y", "yes", "")
     except (EOFError, KeyboardInterrupt):
         return False
+
+
+async def on_event(event_type: str, data: dict):
+    """CLI 进度事件回调：显示 LLM 思考、工具执行等中间状态。"""
+    if event_type == "thinking":
+        t = data.get("turn", "?")
+        m = data.get("max_turns", "?")
+        sys.stdout.write(f"  [{t}/{m}] 思考中...")
+        sys.stdout.flush()
+    elif event_type == "thought":
+        if data.get("has_content"):
+            n = data.get("content_len", 0)
+            sys.stdout.write(f"\r  [{data['turn']}/{data['max_turns']}] LLM 回复文本 ({n} 字)       \n")
+        else:
+            sys.stdout.write(f"\r  [{data['turn']}/{data['max_turns']}] LLM 决定调用工具           \n")
+        sys.stdout.flush()
+    elif event_type == "tool_start":
+        name = data["name"]
+        inp = data.get("input", {})
+        desc = _describe_tool_call(name, inp)
+        sys.stdout.write(f"     ⚙ {desc}...")
+        sys.stdout.flush()
+    elif event_type == "tool_end":
+        elapsed = data.get("elapsed", 0)
+        summary = data.get("result_summary", "")
+        is_err = data.get("is_error", False)
+        status = "✗" if is_err else "✓"
+        sys.stdout.write(f"\r     {status} {summary} ({elapsed:.1f}s)     \n")
+        sys.stdout.flush()
+
+
+def _describe_tool_call(name: str, inp: dict) -> str:
+    """生成工具调用的简短描述。"""
+    if name == "search_web":
+        return f"搜索：{inp.get('query', '')[:60]}"
+    if name == "read_url":
+        return f"读取：{inp.get('url', '')[:60]}"
+    if name == "analyze_github_repo":
+        return f"分析仓库：{inp.get('repo_url', '')[:60]}"
+    if name == "file_write":
+        return f"写文件：{inp.get('path', '?')}"
+    if name == "file_read":
+        return f"读文件：{inp.get('path', '?')}"
+    if name == "run_code":
+        return f"执行：{inp.get('command', '')[:60]}"
+    if name == "list_files":
+        return f"列出文件"
+    if name == "learning_todo_write":
+        n = len(inp.get("todos", []))
+        return f"保存 {n} 项学习任务"
+    return f"{name}"
 
 
 async def main():
     use_real = "--real" in sys.argv
     engine = build_engine(use_real=use_real)
     engine.set_ask_callback(ask_permission)
+    engine.set_on_event(on_event)
     router = InputRouter()
+    t_session_start = time.time()
 
     mode = "真实 API (DeepSeek)" if use_real else "Mock 模式"
     print(f"LearnAgent v0.1.0 | {mode}")
