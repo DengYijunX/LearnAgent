@@ -47,9 +47,9 @@ async def main():
         )
         content = result.get("content", "")
         print(f"  响应：{content[:100]}...")
-        print(f"  小模型测试通过 ✓\n")
+        print(f"  小模型测试通过 [OK]\n")
     except Exception as e:
-        print(f"  小模型测试失败 ✗：{e}\n")
+        print(f"  小模型测试失败 [FAIL]：{e}\n")
 
     # 测试大模型
     print(f"[2/2] 测试大模型 ({cfg.large_model})...")
@@ -64,9 +64,9 @@ async def main():
         )
         content = result.get("content", "")
         print(f"  响应：{content[:100]}...")
-        print(f"  大模型测试通过 ✓\n")
+        print(f"  大模型测试通过 [OK]\n")
     except Exception as e:
-        print(f"  大模型测试失败 ✗：{e}\n")
+        print(f"  大模型测试失败 [FAIL]：{e}\n")
 
     print("冒烟测试完成。")
 

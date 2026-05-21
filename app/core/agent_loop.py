@@ -89,6 +89,7 @@ async def agent_loop(
                     format_error_result(call["id"], f"Tool error: {exc}")
                 )
 
-        messages.append({"role": "user", "content": json.dumps(tool_results, ensure_ascii=False)})
+        for tr in tool_results:
+            messages.append(tr)
 
     return {"messages": messages, "reason": "max_turns"}

@@ -2,6 +2,22 @@ import json
 from app.llm.base import LLMClient
 
 
+def _sanitize_str(s: str) -> str:
+    """Remove lone surrogate characters that break JSON encoding on Windows."""
+    return s.encode("utf-8", errors="surrogateescape").decode("utf-8", errors="replace")
+
+
+def _sanitize(obj):
+    """Recursively sanitize all strings in a dict/list structure."""
+    if isinstance(obj, str):
+        return _sanitize_str(obj)
+    if isinstance(obj, dict):
+        return {k: _sanitize(v) for k, v in obj.items()}
+    if isinstance(obj, list):
+        return [_sanitize(item) for item in obj]
+    return obj
+
+
 class DeepSeekLLMClient(LLMClient):
     """LLMClient backed by DeepSeek OpenAI-compatible API.
 
@@ -45,13 +61,20 @@ class DeepSeekLLMClient(LLMClient):
                 {"type": "function", "function": t} for t in tools
             ]
 
+        payload = _sanitize(payload)
+
         async with httpx.AsyncClient(timeout=60) as client:
             response = await client.post(
                 f"{self._base_url}/chat/completions",
                 headers=headers,
                 json=payload,
             )
-            response.raise_for_status()
+            if response.status_code >= 400:
+                try:
+                    err_body = response.json()
+                except Exception:
+                    err_body = response.text
+                raise RuntimeError(f"DeepSeek API error {response.status_code}: {err_body}")
             data = response.json()
             return data["choices"][0]["message"]
 
