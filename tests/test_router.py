@@ -35,7 +35,7 @@ class TestInputRouter:
     def test_extracts_topic(self, router):
         result = router.route("我想学习 Rust 异步编程")
         assert result["topic"] is not None
-        assert "Rust" in result["topic"]
+        assert "rust" in result["topic"]  # normalized to lowercase
 
     def test_extracts_url_as_topic(self, router):
         result = router.route("https://github.com/org/repo")
