@@ -45,6 +45,7 @@ async def agent_loop(
     tools: ToolRegistry,
     system: str | None = None,
     max_turns: int = 8,
+    ask_callback=None,
 ) -> dict:
     for _turn in range(max_turns):
         assistant_message = await llm.chat(
@@ -77,9 +78,13 @@ async def agent_loop(
                 continue
 
             if decision.behavior == "ask":
-                # In CLI mode, would prompt user here.
-                # For now (and in tests), auto-approve.
-                pass
+                if ask_callback:
+                    approved = await ask_callback(tool.name, decision.reason)
+                    if not approved:
+                        tool_results.append(
+                            format_error_result(call["id"], "用户拒绝了此操作")
+                        )
+                        continue
 
             try:
                 result = await tool.call(call["input"])

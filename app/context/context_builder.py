@@ -1,4 +1,4 @@
-"""上下文构造器 —— 组装 Static Context + Dynamic Context。"""
+"""上下文构造器 —— 组装 Static Context + Dynamic Context + Skill。"""
 
 
 STATIC_CONTEXT = """你是 LearnAgent，一个面向自学者的 AI 学习助手。
@@ -17,6 +17,7 @@ def build_system_prompt(
     current_topic: str | None = None,
     intent: str | None = None,
     user_level: str | None = None,
+    skill_body: str | None = None,
 ) -> str:
     parts = [STATIC_CONTEXT]
 
@@ -30,5 +31,8 @@ def build_system_prompt(
 
     if dynamic:
         parts.append("\n<DYNAMIC_CONTEXT>\n" + "\n".join(dynamic) + "\n</DYNAMIC_CONTEXT>")
+
+    if skill_body:
+        parts.append(f"\n<SKILL>\n{skill_body}\n</SKILL>")
 
     return "\n\n".join(parts)

@@ -18,7 +18,7 @@ from app.tools.read_url import MockReadUrl, RealReadUrl
 from app.tools.github_analyzer import MockGitHubAnalyzer, RealGitHubAnalyzer
 from app.tools.todo_tools import LearningTodoWrite
 from app.core.router import InputRouter
-from app.core.query_engine import LearnQueryEngine
+from app.core.query_engine import LearnQueryEngine, INTENT_TO_SKILL
 from app.memory.session_store import SessionStore
 from app.memory.memory_store import MemoryStore
 
@@ -64,18 +64,33 @@ def build_engine(use_real: bool = False):
         tools=tools,
         session_store=session_store,
         memory_store=memory_store,
+        skills_dir=os.path.join(os.path.dirname(os.path.dirname(__file__)), "skills"),
     )
+
+
+async def ask_permission(tool_name: str, reason: str) -> bool:
+    """CLI 交互式权限确认。"""
+    print(f"\n[权限] 工具 {tool_name} 需要确认：{reason}")
+    try:
+        answer = input("  允许执行？(y/n): ").strip().lower()
+        return answer in ("y", "yes", "")
+    except (EOFError, KeyboardInterrupt):
+        return False
 
 
 async def main():
     use_real = "--real" in sys.argv
     engine = build_engine(use_real=use_real)
+    engine.set_ask_callback(ask_permission)
     router = InputRouter()
 
     mode = "真实 API (DeepSeek)" if use_real else "Mock 模式"
     print(f"LearnAgent v0.1.0 | {mode}")
     print(f"已注册工具：{', '.join(engine.tools._tools.keys())}")
     print(f"会话 ID：{engine.session_id}")
+    skills_loaded = [s for s in engine._skills.keys()]
+    if skills_loaded:
+        print(f"已加载 Skill：{', '.join(skills_loaded)}")
     print("输入 /help 查看命令，/exit 退出\n")
 
     while True:
@@ -94,7 +109,9 @@ async def main():
         topic = route.get("topic")
 
         if not user_input.startswith("/"):
-            print(f"[Router] intent={intent} topic={topic}")
+            skill_name = INTENT_TO_SKILL.get(intent)
+            skill_info = f" skill={skill_name}" if skill_name else ""
+            print(f"[Router] intent={intent} topic={topic}{skill_info}")
 
         result = await engine.submit_message(user_input, topic=topic, intent=intent)
 
