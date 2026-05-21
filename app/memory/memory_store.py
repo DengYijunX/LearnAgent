@@ -34,6 +34,22 @@ class MemoryStore:
             return None
         return _parse_entry(path.read_text(encoding="utf-8"))
 
+    def list_entries(self) -> list[MemoryEntry]:
+        if not self._root.exists():
+            return []
+        return [
+            _parse_entry(path.read_text(encoding="utf-8"))
+            for path in sorted(self._root.glob("*.md"))
+        ]
+
+    def search(self, query: str) -> list[MemoryEntry]:
+        normalized_query = query.lower()
+        return [
+            entry
+            for entry in self.list_entries()
+            if normalized_query in _entry_search_text(entry).lower()
+        ]
+
     def _path_for(self, name: str) -> Path:
         safe_name = SAFE_NAME_PATTERN.sub("_", name).strip("_")
         if not safe_name:
@@ -68,3 +84,7 @@ def _parse_entry(content: str) -> MemoryEntry:
         type=values.get("type", ""),
         body=body.strip(),
     )
+
+
+def _entry_search_text(entry: MemoryEntry) -> str:
+    return "\n".join([entry.name, entry.description, entry.type, entry.body])

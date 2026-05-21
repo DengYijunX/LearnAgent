@@ -56,3 +56,30 @@ def test_memory_store_reads_saved_entry(tmp_path):
         type="user",
         body="用户偏好先讲原理，再给示例。",
     )
+
+
+def test_memory_store_lists_and_searches_entries(tmp_path):
+    store = MemoryStore(tmp_path / "memory")
+    store.save(
+        MemoryEntry(
+            name="langgraph_intro",
+            description="LangGraph 学习主题",
+            type="learning",
+            body="StateGraph 和条件边",
+        )
+    )
+    store.save(
+        MemoryEntry(
+            name="user_profile",
+            description="用户学习偏好",
+            type="user",
+            body="先讲原理，再给示例",
+        )
+    )
+
+    assert [entry.name for entry in store.list_entries()] == [
+        "langgraph_intro",
+        "user_profile",
+    ]
+    assert store.search("条件边")[0].name == "langgraph_intro"
+    assert store.search("用户学习")[0].name == "user_profile"
