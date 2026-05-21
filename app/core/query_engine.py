@@ -10,14 +10,23 @@ SLASH_COMMANDS = {
     "/clear": "清空当前会话",
     "/model": "显示当前模型信息",
     "/tools": "列出已注册工具",
+    "/memory": "查看长期记忆",
     "/exit": "退出 LearnAgent",
 }
 
 
 class LearnQueryEngine:
-    def __init__(self, llm: LLMClient, tools: ToolRegistry):
+    def __init__(
+        self,
+        llm: LLMClient,
+        tools: ToolRegistry,
+        session_store=None,
+        memory_store=None,
+    ):
         self.llm = llm
         self.tools = tools
+        self.session_store = session_store
+        self.memory_store = memory_store
         self.messages: list[dict] = []
         self.session_id = uuid.uuid4().hex[:12]
 
@@ -31,6 +40,7 @@ class LearnQueryEngine:
             return await self._handle_command(user_input)
 
         self.messages.append({"role": "user", "content": user_input})
+        count_before = len(self.messages)
 
         system_prompt = build_system_prompt(
             current_topic=topic,
@@ -45,7 +55,34 @@ class LearnQueryEngine:
             max_turns=8,
         )
 
+        # Session 持久化：保存本轮新增消息
+        if self.session_store:
+            new_msgs = result["messages"][count_before:]
+            for msg in new_msgs:
+                self.session_store.append_message(self.session_id, msg)
+
+        # Memory 持久化：学习意图自动保存主题
+        if self.memory_store and intent in ("learn_concept", "analyze_repo", "review"):
+            self._save_topic_memory(topic, intent, result)
+
         return result
+
+    def _save_topic_memory(self, topic: str | None, intent: str, result: dict):
+        if not topic:
+            return
+        # 提取最后一条 assistant 文本作为学习摘要
+        last_content = ""
+        for m in reversed(result.get("messages", [])):
+            if m.get("role") == "assistant" and m.get("content"):
+                last_content = str(m["content"])[:500]
+                break
+        body = f"- 主题：{topic}\n- 意图：{intent}\n- 最近摘要：{last_content}\n"
+        self.memory_store.save(
+            name=f"topic_{topic}",
+            memory_type="learning",
+            description=f"学习记录：{topic}",
+            body=body,
+        )
 
     async def _handle_command(self, command: str) -> dict:
         cmd = command.strip().split()[0]
@@ -65,6 +102,17 @@ class LearnQueryEngine:
         if cmd == "/tools":
             names = [t for t in self.tools._tools.keys()]
             return {"type": "command", "content": f"已注册工具：{', '.join(names)}"}
+
+        if cmd == "/memory":
+            if not self.memory_store:
+                return {"type": "command", "content": "Memory 存储未启用。"}
+            entries = self.memory_store.list_by_type("learning")
+            if not entries:
+                return {"type": "command", "content": "暂无学习记录。"}
+            lines = ["学习记录："]
+            for e in entries[-10:]:
+                lines.append(f"  - {e['description']}")
+            return {"type": "command", "content": "\n".join(lines)}
 
         if cmd == "/exit":
             return {"type": "command", "content": "再见！"}

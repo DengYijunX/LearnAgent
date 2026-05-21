@@ -34,6 +34,9 @@ class Config:
     api_key: str | None = field(
         default_factory=lambda: os.getenv("DEEPSEEK_API_KEY")
     )
+    storage_base_dir: str = field(
+        default_factory=lambda: os.getenv("LEARNAGENT_STORAGE_DIR", "storage")
+    )
     run_real_tests: bool = field(
         default_factory=lambda: os.getenv("RUN_REAL_TESTS", "0") == "1"
     )

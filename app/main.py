@@ -6,6 +6,7 @@
 """
 
 import asyncio
+import os
 import sys
 
 from app.config.settings import get_config
@@ -17,10 +18,17 @@ from app.tools.read_url import MockReadUrl, RealReadUrl
 from app.tools.todo_tools import LearningTodoWrite
 from app.core.router import InputRouter
 from app.core.query_engine import LearnQueryEngine
+from app.memory.session_store import SessionStore
+from app.memory.memory_store import MemoryStore
 
 
 def build_engine(use_real: bool = False):
     cfg = get_config()
+
+    # 存储初始化
+    storage_base = cfg.storage_base_dir
+    session_store = SessionStore(base_dir=os.path.join(storage_base, "sessions"))
+    memory_store = MemoryStore(base_dir=os.path.join(storage_base, "memory"))
 
     # 工具注册
     tools = ToolRegistry()
@@ -48,7 +56,12 @@ def build_engine(use_real: bool = False):
     else:
         llm = MockLLMClient()
 
-    return LearnQueryEngine(llm=llm, tools=tools)
+    return LearnQueryEngine(
+        llm=llm,
+        tools=tools,
+        session_store=session_store,
+        memory_store=memory_store,
+    )
 
 
 async def main():
@@ -59,6 +72,7 @@ async def main():
     mode = "真实 API (DeepSeek)" if use_real else "Mock 模式"
     print(f"LearnAgent v0.1.0 | {mode}")
     print(f"已注册工具：{', '.join(engine.tools._tools.keys())}")
+    print(f"会话 ID：{engine.session_id}")
     print("输入 /help 查看命令，/exit 退出\n")
 
     while True:
