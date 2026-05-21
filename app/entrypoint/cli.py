@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import json
 
 from app.config.settings import load_settings
 from app.core.workflow import LearnWorkflow, create_default_storage
@@ -41,11 +42,12 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(prog="learnagent")
     parser.add_argument("prompt", nargs="*", help="学习主题、文档链接或 GitHub 仓库地址")
     parser.add_argument("--real", action="store_true", help="使用真实 DeepSeek LLM")
+    parser.add_argument("--json", action="store_true", help="输出结构化 JSON")
     parser.add_argument("--mode", default="normal", help="模型模式，例如 normal/deep/planning")
     return parser.parse_args(argv)
 
 
-async def run_once(user_input: str, llm=None, mode: str | None = None) -> str:
+async def run_workflow_once(user_input: str, llm=None, mode: str | None = None):
     session_store, memory_store = create_default_storage()
     workflow = LearnWorkflow(
         llm=llm or MockLLMClient(),
@@ -57,7 +59,11 @@ async def run_once(user_input: str, llm=None, mode: str | None = None) -> str:
         memory_store=memory_store,
         model_mode=mode,
     )
-    result = await workflow.run(user_input)
+    return await workflow.run(user_input)
+
+
+async def run_once(user_input: str, llm=None, mode: str | None = None) -> str:
+    result = await run_workflow_once(user_input, llm=llm, mode=mode)
     return result.content
 
 
@@ -68,7 +74,11 @@ def main(argv: list[str] | None = None) -> int:
         print("请输入学习主题、文档链接或 GitHub 仓库地址。")
         return 1
     llm = _build_llm(use_real=args.real)
-    print(asyncio.run(run_once(user_input, llm=llm, mode=args.mode)))
+    result = asyncio.run(run_workflow_once(user_input, llm=llm, mode=args.mode))
+    if args.json:
+        print(json.dumps(_workflow_result_to_dict(result), ensure_ascii=False))
+    else:
+        print(result.content)
     return 0
 
 
@@ -80,3 +90,14 @@ def _build_llm(use_real: bool):
         settings=settings,
         model_selector=ModelSelector(settings),
     )
+
+
+def _workflow_result_to_dict(result) -> dict:
+    return {
+        "intent": result.intent,
+        "topic": result.topic,
+        "content": result.content,
+        "output": result.output.to_dict(),
+        "session_id": result.session_id,
+        "metadata": result.metadata,
+    }
