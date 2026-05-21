@@ -15,6 +15,7 @@ from app.llm.model_selector import ModelSelector
 from app.tools.registry import ToolRegistry
 from app.tools.search_web import MockSearchWeb, RealSearchWeb
 from app.tools.read_url import MockReadUrl, RealReadUrl
+from app.tools.github_analyzer import MockGitHubAnalyzer, RealGitHubAnalyzer
 from app.tools.todo_tools import LearningTodoWrite
 from app.core.router import InputRouter
 from app.core.query_engine import LearnQueryEngine
@@ -35,9 +36,11 @@ def build_engine(use_real: bool = False):
     if use_real:
         tools.register(RealSearchWeb(max_results=5))
         tools.register(RealReadUrl(timeout=15))
+        tools.register(RealGitHubAnalyzer(timeout=20))
     else:
         tools.register(MockSearchWeb())
         tools.register(MockReadUrl())
+        tools.register(MockGitHubAnalyzer())
     tools.register(LearningTodoWrite())
 
     # LLM 客户端
