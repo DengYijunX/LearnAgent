@@ -64,6 +64,7 @@ async def agent_loop(
         if on_event:
             await on_event("thought", {
                 "turn": _turn + 1,
+                "max_turns": max_turns,
                 "has_content": content_len > 0,
                 "content_len": content_len,
             })

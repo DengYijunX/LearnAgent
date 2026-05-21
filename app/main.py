@@ -104,11 +104,13 @@ async def on_event(event_type: str, data: dict):
         sys.stdout.write(f"  [{t}/{m}] 思考中...")
         sys.stdout.flush()
     elif event_type == "thought":
+        t = data.get("turn", "?")
+        m = data.get("max_turns", "?")
         if data.get("has_content"):
             n = data.get("content_len", 0)
-            sys.stdout.write(f"\r  [{data['turn']}/{data['max_turns']}] LLM 回复文本 ({n} 字)       \n")
+            sys.stdout.write(f"\r  [{t}/{m}] LLM 回复文本 ({n} 字)       \n")
         else:
-            sys.stdout.write(f"\r  [{data['turn']}/{data['max_turns']}] LLM 决定调用工具           \n")
+            sys.stdout.write(f"\r  [{t}/{m}] LLM 决定调用工具           \n")
         sys.stdout.flush()
     elif event_type == "tool_start":
         name = data["name"]
