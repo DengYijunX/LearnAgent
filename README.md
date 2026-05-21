@@ -1,130 +1,183 @@
 # LearnAgent
 
-AI 学习助手 — 发现新技术 → 理解核心概念 → 动手实践，一个完整的学
-习闭环。
+面向自学者的 AI 学习助手。帮助用户完成「发现新技术 → 理解核心概念 → 阅读资料/仓库 → 动手实践 → 复盘总结」的完整学习闭环。
+
+## 第一阶段成果
+
+14 个提交，106 个测试，8 个工具，3 个学习 Skill。
+
+### 架构
+
+```
+用户输入
+  → InputRouter（规则匹配 5 种意图）
+  → LearnQueryEngine（会话编排 + Skill 注入）
+  → ContextBuilder（Static + Dynamic + Skill 三段 prompt）
+  → Agent Loop（LLM ↔ Tool 循环）
+    → Permission（allow / ask / deny）
+    → Tool 执行（8 个工具）
+    → tool_result 回填
+  → LLM 最终回复
+  → Session 持久化（JSONL）+ Memory 持久化（Markdown）
+```
+
+### LLM 层
+
+| 组件 | 说明 |
+|---|---|
+| `LLMClient` | 抽象基类，统一 `chat` / `stream_chat` 接口 |
+| `MockLLMClient` | 确定性 mock，支持 tool_use/tool_turns 参数控制 |
+| `DeepSeekLLMClient` | OpenAI-compatible API，httpx 异步调用，payload 清洗 |
+| `ModelSelector` | 规则映射：normal → V4 Flash，deep/planning/repo_analysis → V4 Pro |
+
+### 工具层（8 个工具）
+
+| 工具 | 类型 | 说明 |
+|---|---|---|
+| `search_web` | 只读 | Mock + Real（DuckDuckGo），搜索技术资料 |
+| `read_url` | 只读 | Mock + Real（httpx + HTML 提取），读取网页正文 |
+| `analyze_github_repo` | 只读 | Mock + Real（免 token），读取 README + 仓库元信息 |
+| `file_write` | 写入 | 在 workspace 内创建文件，自动建目录，拒绝路径逃逸 |
+| `file_read` | 只读 | 读取 workspace 内文件，支持截断 |
+| `run_code` | 执行 | asyncio subprocess，超时 + 输出截断保护 |
+| `list_files` | 只读 | 列出 workspace 文件树 |
+| `learning_todo_write` | 写入 | 学习任务进度管理 |
+
+### Skill 系统
+
+| Skill | 触发意图 | 工作流步骤 |
+|---|---|---|
+| `learn-concept` | `learn_concept` | 搜索资料 → 解释概念 → 拆解 → 示例 → 学习路线 → 练习 → Todo |
+| `read-repo` | `analyze_repo` | 分析仓库 → 搜索补充 → 总结 → 技术栈 → 模块 → 设计点 → 阅读顺序 → 模仿项目 |
+| `review-progress` | `review` | 回顾记忆 → 自评 → 费曼技巧 → 加强点 → 下阶段建议 → 更新计划 |
+
+### 持久化
+
+| 存储 | 格式 | 目录 |
+|---|---|---|
+| Session | JSONL 逐行追加 | `storage/sessions/<session_id>.jsonl` |
+| Memory | Markdown + YAML frontmatter | `storage/memory/*.md` |
+
+### CLI 命令
+
+```
+/help      查看可用命令
+/topic     查看或切换学习主题
+/progress  查看学习进度
+/model     显示当前模型
+/tools     列出已注册工具
+/memory    查看长期记忆
+/clear     清空当前会话
+/exit      退出
+```
 
 ## 快速开始
 
-```bash
-# 安装
-pip install -e ".[dev]"
+### 安装
 
-# 配置
+```bash
+git clone git@github.com:DengYijunX/LearnAgent.git
+cd LearnAgent
+pip install -e .
+```
+
+### 配置
+
+```bash
 cp .env.example .env
-# 编辑 .env，填入 API Key
-
-# 运行 CLI
-python -m src.main
-
-# 或启动 API 服务
-python -m src.main server
+# 编辑 .env，填写 DEEPSEEK_API_KEY
 ```
 
-## 配置切换 LLM
-
-在 `.env` 中设置 `LLM_PROVIDER`，支持三个 provider：
-
-```env
-# DeepSeek（当前默认）
-LLM_PROVIDER=deepseek
-DEEPSEEK_API_KEY=sk-xxx
-
-# Anthropic
-# LLM_PROVIDER=anthropic
-# ANTHROPIC_API_KEY=sk-ant-xxx
-
-# OpenAI
-# LLM_PROVIDER=openai
-# OPENAI_API_KEY=sk-xxx
-```
-
-Provider 特有配置会自动加载（如 DeepSeek 的 `base_url`），也可手动覆盖 `LLM_BASE_URL` 和 `LLM_MODEL_SIMPLE` / `LLM_MODEL_COMPLEX`。
-
-## 使用方式
-
-### CLI 交互模式
-
-```
-> 什么是RAG
-[路由] simple — 概念查询
-📖 RAG (Retrieval-Augmented Generation)
-核心概念: 检索增强生成, 向量数据库, Embedding
-学习要点:
-  1. 先理解 Embedding
-  2. 再学向量检索
-  3. 最后了解 RAG pipeline
-相关技术: LangChain, LlamaIndex
-
-> 我要学 FastAPI
-[路由] complex — 教学项目生成
-制定了 4 步学习计划
-...
-```
-
-### API
+### 运行
 
 ```bash
-curl -X POST http://localhost:8000/learn \
-  -H "Content-Type: application/json" \
-  -d '{"query":"什么是向量数据库"}'
+# Mock 模式（无需 API key，用于验证架构）
+python -m app.main
+
+# 真实模式（需要配置 .env）
+python -m app.main --real
 ```
 
-## 架构
-
-```
-用户输入 → Router（LLM 分类）
-              ├─ simple → ReAct Agent（搜索→抓取→总结）
-              └─ complex → Plan-Execute Agent（LangGraph 编排）
-                             ├─ plan：LLM 生成教学计划
-                             └─ execute：逐步创建代码文件
-```
-
-```
-agent/
-├── src/
-│   ├── main.py                  # FastAPI + CLI 入口
-│   ├── config.py                # 环境变量配置
-│   ├── llm.py                   # LLM 工厂（多 provider 切换）
-│   ├── logging_config.py        # structlog 初始化
-│   ├── router/router.py         # LLM 任务分类
-│   ├── agent/
-│   │   ├── react_agent.py       # 简单任务 ReAct 循环
-│   │   └── plan_execute_agent.py # 复杂任务 Plan-then-Execute
-│   ├── tools/
-│   │   ├── web_search.py        # Tavily 搜索
-│   │   ├── content_fetch.py     # Jina AI Reader + httpx 降级
-│   │   ├── github_disco.py      # GitHub Trending + 搜索
-│   │   ├── filesystem.py        # 本地项目文件创建
-│   │   └── notify.py            # Slack Webhook + 定时推送
-│   ├── memory/
-│   │   ├── working.py           # LangGraph State 工作记忆
-│   │   ├── short_term.py        # SQLite + ChromaDB
-│   │   └── user_profile.py      # JSON 用户画像
-│   └── models/schemas.py        # Pydantic 数据模型
-└── tests/                       # 33 个测试
-```
-
-## 命令
+### 冒烟测试
 
 ```bash
-make install          # 安装依赖
-make run              # 启动 CLI
-make test             # 运行单元测试
-make test-integration # 运行集成测试（需要 API Key）
-make lint             # 代码检查
-make clean            # 清理缓存
+# 验证 DeepSeek API 连通性
+python scripts/smoke_llm_real.py
 ```
 
-## 依赖
+### 测试
 
-- **框架**: FastAPI, LangGraph, LangChain
-- **LLM**: langchain-anthropic, langchain-openai
-- **工具**: Tavily, httpx, ChromaDB
-- **存储**: aiosqlite, ChromaDB
-- **日志**: structlog
-- **调度**: APScheduler
-- **测试**: pytest, pytest-asyncio, ruff
+```bash
+# 全部单元测试（mock，无需网络）
+pytest tests/ -v
 
-## License
+# 真实集成测试（需要 API key + 网络）
+RUN_REAL_TESTS=1 pytest tests/ -v
+```
 
-MIT
+## 目录结构
+
+```
+LearnAgent/
+├── app/
+│   ├── main.py                  # CLI 入口
+│   ├── config/settings.py       # 配置模块（.env → Config）
+│   ├── llm/                     # LLM 通信层
+│   │   ├── base.py              # LLMClient 抽象
+│   │   ├── mock_client.py       # Mock 实现
+│   │   ├── deepseek_client.py   # DeepSeek 适配器
+│   │   └── model_selector.py    # 模型选择器
+│   ├── tools/                   # 工具层
+│   │   ├── base.py              # Tool 基类
+│   │   ├── registry.py          # ToolRegistry
+│   │   ├── search_web.py        # Mock + Real 搜索
+│   │   ├── read_url.py          # Mock + Real 网页读取
+│   │   ├── github_analyzer.py   # Mock + Real 仓库分析
+│   │   ├── workspace_tools.py   # FileWrite/Read/RunCode/ListFiles
+│   │   └── todo_tools.py        # LearningTodoWrite
+│   ├── core/                    # 编排层
+│   │   ├── agent_loop.py        # Agent 循环
+│   │   ├── query_engine.py      # 会话编排 + Skill 注入
+│   │   └── router.py            # 输入路由器
+│   ├── context/                 # 上下文层
+│   │   └── context_builder.py   # Static + Dynamic + Skill
+│   ├── memory/                  # 记忆层
+│   │   ├── session_store.py     # JSONL 会话存储
+│   │   └── memory_store.py      # Markdown 长期记忆
+│   ├── safety/                  # 安全层
+│   │   └── permission.py        # 权限系统
+│   └── skills/                  # Skill 加载器
+│       └── loader.py            # SKILL.md 解析器
+├── skills/                      # Skill 定义
+│   ├── learn-concept/SKILL.md
+│   ├── read-repo/SKILL.md
+│   └── review-progress/SKILL.md
+├── scripts/
+│   └── smoke_llm_real.py        # LLM 冒烟测试
+├── tests/                       # 106 个测试
+├── docs/
+│   ├── agent_design_reference_full.md
+│   ├── learnagent_architecture_design_v1.md
+│   ├── decision-confirmation-rules.md
+│   └── decisions.md             # 架构决策记录
+├── pyproject.toml
+├── .env.example
+└── README.md
+```
+
+## 分支策略
+
+- `main`：稳定分支
+- `agent/claude-rebuild`：Claude Code 从零构建路线
+- `agent/claude-continue`：基于已有实现继续演进
+- `agent/codex-rebuild`：Codex 从零构建路线
+
+## 技术栈
+
+- Python >= 3.10
+- LLM：DeepSeek V4 Flash / V4 Pro（OpenAI-compatible API）
+- 搜索：ddgs（DuckDuckGo）
+- HTTP：httpx（异步）
+- CLI：标准 input/print
+- 测试：pytest + pytest-asyncio
+- 配置：python-dotenv

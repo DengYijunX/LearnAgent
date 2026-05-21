@@ -1,11 +1,38 @@
+# Python
 __pycache__/
-*.pyc
-.env
+*.py[cod]
+*.egg-info/
+dist/
+build/
+*.egg
+
+# Virtual environments
 .venv/
 venv/
-node_modules/
-.superpowers/
-data/
-projects/
-*.egg-info/
-*.db
+env/
+
+# Environment
+.env
+
+# Storage (user data, not tracked)
+storage/
+
+# Logs
+logs/
+*.log
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Test
+.pytest_cache/
+.coverage
+htmlcov/
+
