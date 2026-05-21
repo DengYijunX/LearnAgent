@@ -8,7 +8,7 @@ from app.llm.mock_client import MockLLMClient
 from app.tools.github_repo_analyzer import GitHubRepoAnalyzerTool
 
 
-def test_build_default_tool_registry_registers_stage_one_mock_tools():
+def test_build_default_tool_registry_registers_stage_one_tools():
     registry = build_default_tool_registry()
 
     assert registry.find("search_web") is not None
