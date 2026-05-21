@@ -16,6 +16,7 @@ from app.tools.registry import ToolRegistry
 from app.tools.search_web import MockSearchWeb, RealSearchWeb
 from app.tools.read_url import MockReadUrl, RealReadUrl
 from app.tools.github_analyzer import MockGitHubAnalyzer, RealGitHubAnalyzer
+from app.tools.workspace_tools import FileWrite, FileRead, RunCode, ListFiles
 from app.tools.todo_tools import LearningTodoWrite
 from app.core.router import InputRouter
 from app.core.query_engine import LearnQueryEngine, INTENT_TO_SKILL
@@ -42,6 +43,13 @@ def build_engine(use_real: bool = False):
         tools.register(MockReadUrl())
         tools.register(MockGitHubAnalyzer())
     tools.register(LearningTodoWrite())
+
+    # workspace 工具（路径限制在 workspace/ 目录）
+    workspace_dir = os.path.join(storage_base, "workspace")
+    tools.register(FileWrite(workspace_root=workspace_dir))
+    tools.register(FileRead(workspace_root=workspace_dir))
+    tools.register(RunCode(workspace_root=workspace_dir, timeout=30))
+    tools.register(ListFiles(workspace_root=workspace_dir))
 
     # LLM 客户端
     if use_real:
