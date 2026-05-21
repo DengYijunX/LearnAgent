@@ -207,3 +207,159 @@ Web Search 和 GitHub API 对学习场景有价值，但第一阶段需要控制
 1. 所有外部能力先定义抽象接口，再提供 mock 和真实实现。
 2. 真实集成测试使用 `@pytest.mark.skipif` 条件跳过。
 3. `RUN_REAL_TESTS` 作为 feature flag 控制。
+
+---
+
+## Decision 008：真实搜索使用 DuckDuckGo（ddgs）
+
+**日期：** 2026-05-21
+
+**状态：** Accepted
+
+**背景：**
+
+第一阶段需要接入真实 Web Search，但付费搜索 API 涉及成本、配额和注册流程。
+
+**决策：**
+
+使用 `ddgs`（DuckDuckGo Search）作为真实搜索后端，免费、无需 API key。
+
+**理由：**
+
+1. 零成本、零注册，适合开发阶段。
+2. 返回 title / url / snippet 三元组，满足学习资料检索需求。
+3. `ddgs` 是 `duckduckgo_search` 的新版替代，API 更稳定。
+
+**影响：**
+
+1. 新增依赖 `ddgs`。
+2. `RealSearchWeb` 和 `MockSearchWeb` 共享 `name: search_web`，CLI 根据 `--real` 选择。
+3. 搜索结果噪声可能较高，LLM 需要自行筛选。
+
+---
+
+## Decision 009：GitHub 仓库分析免 token 实现
+
+**日期：** 2026-05-21
+
+**状态：** Accepted
+
+**背景：**
+
+GitHub 仓库分析是学习场景的重要需求，但 GitHub API token 涉及权限管理。
+
+**决策：**
+
+第一阶段使用免 token 方式：
+- README：`raw.githubusercontent.com` 直接获取（尝试 main/master 分支）
+- 仓库信息：`api.github.com/repos/{owner}/{repo}`（公开仓库免认证）
+- 两者都失败则返回错误
+
+**理由：**
+
+1. 避免 token 管理的复杂度。
+2. 公开仓库的 README 和元信息已足够学习分析。
+3. 后续如需深度分析（文件树、commit 历史），再引入 GitHub API token。
+
+**影响：**
+
+1. `RealGitHubAnalyzer` 无需任何认证配置。
+2. 私有仓库无法分析（预期行为）。
+3. GitHub API 有未认证 rate limit（60 次/小时），足够学习场景使用。
+
+---
+
+## Decision 010：Session/Memory 双轨持久化
+
+**日期：** 2026-05-21
+
+**状态：** Accepted
+
+**背景：**
+
+Agent 需要区分短期会话流水和长期学习记忆。
+
+**决策：**
+
+- **Session**：JSONL 格式，逐行追加，保存于 `storage/sessions/<session_id>.jsonl`。
+- **Memory**：Markdown + YAML frontmatter，保存于 `storage/memory/*.md`。
+- 学习意图（learn_concept / analyze_repo / review）自动触发 Memory 写入。
+- `storage/` 目录加入 `.gitignore`，不上传到 Git。
+
+**理由：**
+
+1. JSONL 适合逐行追加和恢复，适合会话记录。
+2. Markdown + frontmatter 人类可读、可手动编辑、git diff 友好。
+3. 自动写入降低用户操作负担，同时避免垃圾记忆（仅学习意图触发）。
+
+**影响：**
+
+1. `storage/` 必须在 `.gitignore` 中。
+2. `QueryEngine` 接受 `session_store` 和 `memory_store` 注入。
+3. 后续可替换为 SQLite / 向量数据库，只需实现相同接口。
+
+---
+
+## Decision 011：Skill 系统根据意图自动注入
+
+**日期：** 2026-05-21
+
+**状态：** Accepted
+
+**背景：**
+
+设计文档定义了 learn-concept / read-repo / review-progress 等 Skill，但需要在 Agent Loop 中生效。
+
+**决策：**
+
+- QueryEngine 根据 Router 识别的 intent 自动匹配 Skill。
+- 映射：`learn_concept` → `learn-concept`，`analyze_repo` → `read-repo`，`review` → `review-progress`。
+- Skill body 注入 system prompt 的 `<SKILL>` 标签段。
+- Skill 定义和业务代码解耦，通过 SKILL.md 文件管理。
+
+**理由：**
+
+1. 自动注入减少用户操作，学习流程更顺畅。
+2. SKILL.md 独立文件便于人工编辑和版本控制。
+3. 映射关系集中在 `INTENT_TO_SKILL` 字典，后续可扩展。
+
+**影响：**
+
+1. `ContextBuilder.build_system_prompt()` 新增 `skill_body` 参数。
+2. Skill 文件放在 `skills/` 目录，CLI 启动时自动加载。
+3. Skills 变更不需要改代码。
+
+---
+
+## Decision 012：Workspace 工具参考 Claude Code 设计
+
+**日期：** 2026-05-21
+
+**状态：** Accepted
+
+**背景：**
+
+学习闭环缺少实践环节，用户需要创建项目文件、阅读和运行代码。
+
+**决策：**
+
+参考 Claude Code 的 Read/Write/Bash 工具设计，实现 workspace 工具：
+- `file_write` / `file_read`：文件读写，所有路径解析后必须在 `workspace_root` 内。
+- `run_code`：asyncio subprocess 执行，超时 30s + 输出截断 5000 字符。
+- `list_files`：列出 workspace 文件树。
+- 路径安全：拒绝绝对路径和 `../` 逃逸。
+- 权限：file_write 和 run_code 为 `is_read_only=False`，触发 ask 权限。
+- RunCode 暂不做 Docker 沙箱（Phase 2）。
+
+**理由：**
+
+1. Claude Code 这套工具设计经过大量实战验证，路径限制 + 权限 + 截断三层保护成熟可靠。
+2. 学习场景只需基础文件操作和代码执行，不需要完整的 Shell 能力。
+3. 路径逃逸拒绝是安全底线。
+4. Docker 沙箱可在 Phase 2 按需引入。
+
+**影响：**
+
+1. 新增 `app/tools/workspace_tools.py`（4 个工具类）。
+2. workspace 目录位于 `storage/workspace/`。
+3. RunCode 在 Windows 上 timeout 行为与 Unix 不同，相关测试标记 skip。
