@@ -16,9 +16,9 @@ from app.tasks.todo_store import TodoStore
 from app.tools.memory_tools import SaveMemoryTool, SearchMemoryTool
 from app.tools.mock_learning_tools import (
     MockGitHubRepoAnalyzerTool,
-    MockReadUrlTool,
     MockSearchWebTool,
 )
+from app.tools.read_url import ReadUrlTool
 from app.tools.registry import ToolRegistry
 from app.tools.todo_tools import LearningTodoWriteTool
 
@@ -30,7 +30,7 @@ def build_default_tool_registry(
     registry = ToolRegistry()
     resolved_memory_store = memory_store or MemoryStore("storage/memory")
     registry.register(MockSearchWebTool())
-    registry.register(MockReadUrlTool())
+    registry.register(ReadUrlTool())
     registry.register(MockGitHubRepoAnalyzerTool())
     registry.register(LearningTodoWriteTool(todo_store or TodoStore("storage/tasks")))
     registry.register(SearchMemoryTool(resolved_memory_store))

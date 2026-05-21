@@ -59,6 +59,12 @@ python -m pytest
 python scripts/smoke_llm_real.py
 ```
 
+手动验证真实网页读取：
+
+```powershell
+python scripts/smoke_read_url_real.py https://example.com/
+```
+
 手动验证真实 DeepSeek LLM + mock tools 的最小 Agent 闭环：
 
 ```powershell
