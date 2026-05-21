@@ -25,6 +25,17 @@ class EchoTool(Tool):
         return ToolResult(content=f"echo:{tool_input['text']}")
 
 
+class ContextTool(Tool):
+    name = "context"
+    description = "Return context values."
+    input_schema = {"type": "object", "properties": {}}
+
+    async def call(self, tool_input, context):
+        return ToolResult(
+            content=f"{context['session_id']}|{context['current_topic']}"
+        )
+
+
 @pytest.mark.asyncio
 async def test_agent_loop_executes_standard_tool_call_and_finishes():
     registry = ToolRegistry()
@@ -105,3 +116,24 @@ async def test_agent_loop_returns_tool_error_for_unknown_tool():
 
     assert result.reason == "completed"
     assert "Unknown tool" in llm.requests[1].messages[-1]["content"]
+
+
+@pytest.mark.asyncio
+async def test_agent_loop_passes_context_to_tools():
+    registry = ToolRegistry()
+    registry.register(ContextTool())
+    llm = SequencedLLMClient(
+        [
+            LLMResponse(content='{"action": "context", "arguments": {}}'),
+            LLMResponse(content="完成"),
+        ]
+    )
+
+    await run_agent_loop(
+        llm=llm,
+        tools=registry,
+        messages=[{"role": "user", "content": "use context"}],
+        tool_context={"session_id": "session-1", "current_topic": "LangGraph"},
+    )
+
+    assert llm.requests[1].messages[-1]["content"] == "session-1|LangGraph"

@@ -34,10 +34,12 @@ async def run_agent_loop(
     system_prompt: str | None = None,
     mode: str | None = None,
     max_turns: int = 4,
+    tool_context: dict[str, Any] | None = None,
 ) -> AgentLoopResult:
     current_messages = list(messages)
     final_content = ""
     allow_tools = True
+    context = tool_context or {}
 
     for turn in range(1, max_turns + 1):
         response = await llm.chat(
@@ -64,7 +66,7 @@ async def run_agent_loop(
             )
 
         for call in tool_calls:
-            tool_result = await _execute_tool_call(call, tools)
+            tool_result = await _execute_tool_call(call, tools, context)
             current_messages.append(
                 _tool_result_message(call, tool_result)
             )
@@ -78,12 +80,16 @@ async def run_agent_loop(
     )
 
 
-async def _execute_tool_call(call: ParsedToolCall, tools: ToolRegistry) -> ToolResult:
+async def _execute_tool_call(
+    call: ParsedToolCall,
+    tools: ToolRegistry,
+    context: dict[str, Any],
+) -> ToolResult:
     tool = tools.find(call.name)
     if tool is None:
         return ToolResult(content=f"Unknown tool: {call.name}", is_error=True)
     try:
-        return await tool.call(call.arguments, context={})
+        return await tool.call(call.arguments, context=context)
     except Exception as exc:
         return ToolResult(content=f"Tool {call.name} failed: {exc}", is_error=True)
 

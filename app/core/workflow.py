@@ -63,6 +63,11 @@ class LearnWorkflow:
             messages=[{"role": "user", "content": user_input}],
             system_prompt=_build_system_prompt(route.intent),
             mode=_mode_for_intent(route.intent),
+            tool_context={
+                "session_id": self.session_id,
+                "current_topic": route.topic,
+                "intent": route.intent,
+            },
         )
         result = WorkflowResult(
             intent=route.intent,
