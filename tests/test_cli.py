@@ -5,6 +5,7 @@ from types import SimpleNamespace
 from app.entrypoint import cli
 from app.entrypoint.cli import build_default_tool_registry, main, parse_args, run_once
 from app.llm.mock_client import MockLLMClient
+from app.tools.github_repo_analyzer import GitHubRepoAnalyzerTool
 
 
 def test_build_default_tool_registry_registers_stage_one_mock_tools():
@@ -13,6 +14,7 @@ def test_build_default_tool_registry_registers_stage_one_mock_tools():
     assert registry.find("search_web") is not None
     assert registry.find("read_url") is not None
     assert registry.find("github_repo_analyzer") is not None
+    assert isinstance(registry.find("github_repo_analyzer"), GitHubRepoAnalyzerTool)
     assert registry.find("learning_todo_write") is not None
     assert registry.find("search_memory") is not None
     assert registry.find("save_memory") is not None
