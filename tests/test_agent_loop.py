@@ -66,7 +66,7 @@ class TestAgentLoop:
         tools = ToolRegistry()
         tools.register(AlwaysTool())
 
-        llm = MockLLMClient(respond_with_tool=True)
+        llm = MockLLMClient(respond_with_tool=True, tool_turns=10)
         messages = [{"role": "user", "content": "go"}]
 
         result = await agent_loop(messages=messages, llm=llm, tools=tools, max_turns=2)
