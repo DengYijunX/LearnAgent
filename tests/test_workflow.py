@@ -37,6 +37,8 @@ async def test_workflow_routes_runs_llm_and_persists_result(tmp_path):
     assert result.intent == "learn_concept"
     assert result.topic == "LangGraph"
     assert result.content == "LangGraph 是用于构建有状态 Agent 工作流的框架。"
+    assert result.output.summary == result.content
+    assert result.output.to_dict()["summary"] == result.content
     assert llm.requests[0].mode == "normal"
     assert llm.requests[0].tools == registry.to_api_schema()
 

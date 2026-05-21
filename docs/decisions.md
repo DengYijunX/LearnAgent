@@ -176,6 +176,28 @@ JSON 易读、易测试，也方便后续替换为 SQLite 或更完整的 Task G
 
 第一阶段优先保证单轮工具使用后的最终回答。后续如果要支持复杂多轮工具规划，需要单独设计工具预算、重复调用保护和更明确的 planner/executor 策略。
 
+## Decision 011：第一阶段学习输出使用轻量结构化 Schema
+
+日期：2026-05-21
+
+状态：Accepted
+
+背景：
+
+LearnAgent 的输出需要同时适合 CLI 阅读和后续程序化处理。真实 LLM 不一定稳定返回严格 JSON。
+
+决策：
+
+引入 `LearningOutput`，包含 `summary`、`concepts`、`learning_path`、`practice_tasks`、`related_topics`、`sources` 字段。若 LLM 输出是 JSON，则解析这些字段；若是普通文本，则将全文作为 `summary`。
+
+理由：
+
+这能在不牺牲真实模型稳定性的前提下，为后续 UI、API 和存储提供稳定字段。
+
+影响：
+
+WorkflowResult 同时保留原始 `content` 和结构化 `output`。CLI 继续打印文本，session 记录会保存结构化输出。
+
 ## Decision 007：测试边界
 
 日期：2026-05-20

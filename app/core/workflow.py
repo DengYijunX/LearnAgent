@@ -8,6 +8,7 @@ from typing import Any
 from uuid import uuid4
 
 from app.core.agent_loop import run_agent_loop
+from app.core.output_schema import LearningOutput
 from app.core.router import InputRouter
 from app.llm.base import LLMClient
 from app.memory.memory_store import MemoryEntry, MemoryStore
@@ -20,6 +21,7 @@ class WorkflowResult:
     intent: str
     topic: str
     content: str
+    output: LearningOutput
     session_id: str
     metadata: dict[str, Any]
 
@@ -73,6 +75,7 @@ class LearnWorkflow:
             intent=route.intent,
             topic=route.topic,
             content=loop_result.final_content,
+            output=LearningOutput.from_text(loop_result.final_content),
             session_id=self.session_id,
             metadata={"reason": loop_result.reason, "turns": loop_result.turns},
         )
@@ -84,6 +87,7 @@ class LearnWorkflow:
                 "intent": result.intent,
                 "topic": result.topic,
                 "content": result.content,
+                "output": result.output.to_dict(),
                 "metadata": result.metadata,
             },
         )
@@ -110,6 +114,7 @@ def _build_system_prompt(intent: str) -> str:
     return (
         "你是 LearnAgent，一个面向自学者的 AI 学习助手。"
         "请围绕用户目标给出清晰、可执行、适合第一阶段的学习帮助。"
+        "输出应覆盖 summary、concepts、learning_path、practice_tasks、related_topics、sources 这些信息。"
         f"当前意图：{intent}。"
     )
 
