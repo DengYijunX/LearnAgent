@@ -101,7 +101,14 @@ async def test_deepseek_client_builds_openai_compatible_request():
     assert captured["payload"]["model"] == "deepseek-pro-id"
     assert captured["payload"]["temperature"] == 0.3
     assert captured["payload"]["max_tokens"] == 4096
-    assert captured["payload"]["tools"] == [{"name": "search_web"}]
+    assert captured["payload"]["tools"] == [
+        {
+            "type": "function",
+            "function": {
+                "name": "search_web",
+            },
+        }
+    ]
     assert captured["payload"]["messages"] == [
         {"role": "system", "content": "你是 LearnAgent"},
         {"role": "user", "content": "总结一下 LangGraph"},

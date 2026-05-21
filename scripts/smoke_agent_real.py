@@ -10,6 +10,8 @@ import sys
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
 from app.config.settings import load_settings
 from app.core.workflow import LearnWorkflow, create_default_storage
@@ -36,6 +38,9 @@ async def main() -> int:
         memory_store=memory_store,
     )
     result = await workflow.run("我想学习 LangGraph，请给一个第一阶段学习路线。")
+    if not result.content.strip():
+        print(f"真实 Agent smoke test 未得到最终文本输出：{result.metadata}")
+        return 1
     print(result.content)
     return 0
 

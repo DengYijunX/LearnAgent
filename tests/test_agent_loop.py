@@ -57,6 +57,9 @@ async def test_agent_loop_executes_standard_tool_call_and_finishes():
     assert result.reason == "completed"
     assert result.final_content == "完成：echo:hello"
     assert llm.requests[0].tools == registry.to_api_schema()
+    assert llm.requests[1].tools == []
+    assert llm.requests[1].messages[-2]["role"] == "assistant"
+    assert llm.requests[1].messages[-2]["tool_calls"][0]["id"] == "call_1"
     assert llm.requests[1].messages[-1]["role"] == "tool"
     assert llm.requests[1].messages[-1]["tool_call_id"] == "call_1"
     assert llm.requests[1].messages[-1]["content"] == "echo:hello"
@@ -80,7 +83,8 @@ async def test_agent_loop_supports_json_action_fallback():
     )
 
     assert result.final_content == "完成：echo:hi"
-    assert llm.requests[1].messages[-1]["name"] == "echo"
+    assert llm.requests[1].tools == []
+    assert llm.requests[1].messages[-1]["role"] == "user"
     assert llm.requests[1].messages[-1]["content"] == "echo:hi"
 
 

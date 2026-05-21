@@ -80,7 +80,7 @@ class DeepSeekLLMClient:
             ),
         }
         if llm_request.tools:
-            payload["tools"] = llm_request.tools
+            payload["tools"] = [_to_openai_tool_schema(tool) for tool in llm_request.tools]
         return payload
 
 
@@ -92,6 +92,19 @@ def _extract_message(raw: dict[str, Any]) -> dict[str, Any]:
     if isinstance(message, dict):
         return message
     return {}
+
+
+def _to_openai_tool_schema(tool: dict[str, Any]) -> dict[str, Any]:
+    if tool.get("type") == "function":
+        return tool
+    function: dict[str, Any] = {"name": tool["name"]}
+    if "description" in tool:
+        function["description"] = tool["description"]
+    if "input_schema" in tool:
+        function["parameters"] = tool["input_schema"]
+    elif "parameters" in tool:
+        function["parameters"] = tool["parameters"]
+    return {"type": "function", "function": function}
 
 
 async def _default_transport(

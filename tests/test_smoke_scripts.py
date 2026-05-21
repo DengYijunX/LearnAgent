@@ -15,6 +15,7 @@ def test_smoke_llm_real_script_skips_without_real_test_flag():
         env=env,
         capture_output=True,
         text=True,
+        encoding="utf-8",
         check=False,
     )
 
@@ -33,6 +34,7 @@ def test_smoke_agent_real_script_skips_without_real_test_flag():
         env=env,
         capture_output=True,
         text=True,
+        encoding="utf-8",
         check=False,
     )
 

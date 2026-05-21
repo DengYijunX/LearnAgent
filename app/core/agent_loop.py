@@ -24,6 +24,7 @@ class ParsedToolCall:
     id: str
     name: str
     arguments: dict[str, Any]
+    is_native: bool = False
 
 
 async def run_agent_loop(
@@ -36,18 +37,22 @@ async def run_agent_loop(
 ) -> AgentLoopResult:
     current_messages = list(messages)
     final_content = ""
+    allow_tools = True
 
     for turn in range(1, max_turns + 1):
         response = await llm.chat(
             LLMRequest(
                 messages=[dict(message) for message in current_messages],
                 system=system_prompt,
-                tools=tools.to_api_schema(),
+                tools=tools.to_api_schema() if allow_tools else [],
                 mode=mode,
             )
         )
         final_content = response.content
-        current_messages.append({"role": "assistant", "content": response.content})
+        assistant_message: dict[str, Any] = {"role": "assistant", "content": response.content}
+        if response.tool_calls:
+            assistant_message["tool_calls"] = response.tool_calls
+        current_messages.append(assistant_message)
 
         tool_calls = _parse_tool_calls(response)
         if not tool_calls:
@@ -61,14 +66,9 @@ async def run_agent_loop(
         for call in tool_calls:
             tool_result = await _execute_tool_call(call, tools)
             current_messages.append(
-                {
-                    "role": "tool",
-                    "tool_call_id": call.id,
-                    "name": call.name,
-                    "content": tool_result.content,
-                    "is_error": tool_result.is_error,
-                }
+                _tool_result_message(call, tool_result)
             )
+        allow_tools = False
 
     return AgentLoopResult(
         messages=current_messages,
@@ -105,6 +105,7 @@ def _parse_standard_tool_call(call: dict[str, Any]) -> ParsedToolCall:
         id=str(call.get("id") or function.get("name") or "tool_call"),
         name=str(function.get("name") or call.get("name")),
         arguments=arguments,
+        is_native=True,
     )
 
 
@@ -122,4 +123,22 @@ def _parse_json_action(content: str) -> ParsedToolCall | None:
         id=str(payload.get("id") or payload["action"]),
         name=str(payload["action"]),
         arguments=arguments,
+        is_native=False,
     )
+
+
+def _tool_result_message(call: ParsedToolCall, tool_result: ToolResult) -> dict[str, Any]:
+    if call.is_native:
+        return {
+            "role": "tool",
+            "tool_call_id": call.id,
+            "name": call.name,
+            "content": tool_result.content,
+            "is_error": tool_result.is_error,
+        }
+    return {
+        "role": "user",
+        "content": tool_result.content,
+        "name": call.name,
+        "is_error": tool_result.is_error,
+    }

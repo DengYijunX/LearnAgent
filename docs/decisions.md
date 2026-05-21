@@ -154,6 +154,28 @@ JSON 易读、易测试，也方便后续替换为 SQLite 或更完整的 Task G
 
 `storage/tasks/` 由 Git 忽略。Workflow 和 Agent Loop 应通过 ToolRegistry 使用 todo 工具，不直接依赖底层文件结构。
 
+## Decision 010：第一阶段工具调用后暂停继续暴露工具
+
+日期：2026-05-21
+
+状态：Accepted
+
+背景：
+
+真实 DeepSeek Agent smoke test 中，模型在工具调用后可能继续重复调用工具，导致达到 `max_turns` 仍没有最终文本输出。
+
+决策：
+
+第一阶段 Agent Loop 在执行一轮工具后，下一次 LLM 请求不再继续传入工具列表，而是让模型基于 observation 生成最终回答。
+
+理由：
+
+这能稳定验证“真实 LLM + mock tools”的最小闭环，避免第一阶段陷入复杂多轮工具调度问题。
+
+影响：
+
+第一阶段优先保证单轮工具使用后的最终回答。后续如果要支持复杂多轮工具规划，需要单独设计工具预算、重复调用保护和更明确的 planner/executor 策略。
+
 ## Decision 007：测试边界
 
 日期：2026-05-20
