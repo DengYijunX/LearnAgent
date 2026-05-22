@@ -83,21 +83,25 @@ async def agent_loop(
                 )
                 continue
 
-            decision = check_permission(tool, call["input"])
-            if decision.behavior == "deny":
-                tool_results.append(
-                    format_error_result(call["id"], decision.reason)
-                )
-                continue
-
-            if decision.behavior == "ask":
-                if ask_callback:
-                    approved = await ask_callback(tool.name, decision.reason, call["input"])
-                    if not approved:
-                        tool_results.append(
-                            format_error_result(call["id"], "用户拒绝了此操作")
-                        )
-                        continue
+            # 只读工具自动允许，写入/执行工具才询问
+            if tool.is_read_only():
+                # 自动通过，不弹确认
+                pass
+            else:
+                decision = check_permission(tool, call["input"])
+                if decision.behavior == "deny":
+                    tool_results.append(
+                        format_error_result(call["id"], decision.reason)
+                    )
+                    continue
+                if decision.behavior == "ask":
+                    if ask_callback:
+                        approved = await ask_callback(tool.name, decision.reason, call["input"])
+                        if not approved:
+                            tool_results.append(
+                                format_error_result(call["id"], "用户拒绝了此操作")
+                            )
+                            continue
 
             # 通知：工具开始执行
             t0 = time.time()
@@ -111,12 +115,14 @@ async def agent_loop(
             try:
                 result = await tool.call(call["input"])
                 elapsed = time.time() - t0
+                summary, extra = _summarize_result(call["name"], result)
                 if on_event:
                     await on_event("tool_end", {
                         "name": call["name"],
                         "elapsed": elapsed,
                         "is_error": result.get("isError", False),
-                        "result_summary": _summarize_result(call["name"], result),
+                        "result_summary": summary,
+                        **extra,
                     })
                 tool_results.append(format_tool_result(call["id"], result))
             except Exception as exc:
@@ -138,13 +144,15 @@ async def agent_loop(
     return {"messages": messages, "reason": "max_turns"}
 
 
-def _summarize_result(tool_name: str, result: dict) -> str:
-    """Generate a one-line summary of tool execution result."""
+def _summarize_result(tool_name: str, result: dict) -> tuple[str, dict]:
+    """Generate a one-line summary and extra data (like search titles)."""
+    extra = {}
     if result.get("isError"):
-        return result.get("error", "未知错误")[:80]
+        return result.get("error") or result.get("stderr", "未知错误")[:80], extra
     if tool_name == "search_web":
         n = len(result.get("results", []))
-        return f"找到 {n} 条搜索结果"
+        extra["result_titles"] = [r.get("title", "") for r in result.get("results", [])]
+        return f"找到 {n} 条搜索结果", extra
     if tool_name == "read_url":
         content = result.get("content", "")
         return f"读取网页，{len(content)} 字符"
