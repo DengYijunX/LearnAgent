@@ -60,7 +60,7 @@ class RealReadUrl(Tool):
 
             async with httpx.AsyncClient(timeout=self._timeout, follow_redirects=True) as client:
                 response = await client.get(url, headers={
-                    "User-Agent": "LearnAgent/0.1",
+                    "User-Agent": "Mozilla/5.0 (compatible; LearnAgent/0.2; +https://github.com/DengYijunX/LearnAgent)",
                     "Accept": "text/html,application/xhtml+xml",
                 })
                 response.raise_for_status()

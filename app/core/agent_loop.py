@@ -148,29 +148,32 @@ def _summarize_result(tool_name: str, result: dict) -> tuple[str, dict]:
     """Generate a one-line summary and extra data (like search titles)."""
     extra = {}
     if result.get("isError"):
-        return result.get("error") or result.get("stderr", "未知错误")[:80], extra
+        err = (result.get("error") or result.get("stderr") or "未知错误")
+        # 去掉换行，截断
+        err = str(err).replace("\n", " ")[:80]
+        return err, extra
     if tool_name == "search_web":
         n = len(result.get("results", []))
         extra["result_titles"] = [r.get("title", "") for r in result.get("results", [])]
         return f"找到 {n} 条搜索结果", extra
     if tool_name == "read_url":
         content = result.get("content", "")
-        return f"读取网页，{len(content)} 字符"
+        return f"读取网页，{len(content)} 字符", extra
     if tool_name == "analyze_github_repo":
         content = result.get("content", "")
-        return f"分析仓库，{len(content)} 字符"
+        return f"分析仓库，{len(content)} 字符", extra
     if tool_name == "file_write":
-        return f"写入文件 {result.get('path', '?')}"
+        return f"写入文件 {result.get('path', '?')}", extra
     if tool_name == "file_read":
         content = result.get("content", "")
-        return f"读取文件，{len(content)} 字符"
+        return f"读取文件，{len(content)} 字符", extra
     if tool_name == "run_code":
         stdout = result.get("stdout", "")
         returncode = result.get("returncode", "?")
-        return f"执行完毕 (exit={returncode})，输出 {len(stdout)} 字符"
+        return f"执行完毕 (exit={returncode})，输出 {len(stdout)} 字符", extra
     if tool_name == "list_files":
         files = result.get("files", "")
-        return f"列出文件" + (f"：{files[:60]}" if files else "（空）")
+        return f"列出文件" + (f"：{files[:60]}" if files else "（空）"), extra
     if tool_name == "learning_todo_write":
-        return f"保存 {result.get('count', 0)} 项学习任务"
-    return "完成"
+        return f"保存 {result.get('count', 0)} 项学习任务", extra
+    return "完成", extra
