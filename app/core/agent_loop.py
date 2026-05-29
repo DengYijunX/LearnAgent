@@ -1,4 +1,5 @@
 import json
+import time
 
 from app.llm.base import LLMClient
 from app.tools.registry import ToolRegistry
@@ -6,7 +7,6 @@ from app.safety.permission import check_permission, PermissionDecision
 
 
 def extract_tool_calls(assistant_message: dict) -> list[dict]:
-    """Extract tool_calls from an assistant message in OpenAI-compatible format."""
     tool_calls = assistant_message.get("tool_calls", [])
     if not tool_calls:
         return []
@@ -46,8 +46,14 @@ async def agent_loop(
     system: str | None = None,
     max_turns: int = 8,
     ask_callback=None,
+    on_event=None,
+    permission_mode: str = "default",
 ) -> dict:
     for _turn in range(max_turns):
+        # 通知：开始思考
+        if on_event:
+            await on_event("thinking", {"turn": _turn + 1, "max_turns": max_turns})
+
         assistant_message = await llm.chat(
             messages=messages,
             system=system,
@@ -55,6 +61,14 @@ async def agent_loop(
         )
 
         messages.append(assistant_message)
+        content_len = len(assistant_message.get("content") or "")
+        if on_event:
+            await on_event("thought", {
+                "turn": _turn + 1,
+                "max_turns": max_turns,
+                "has_content": content_len > 0,
+                "content_len": content_len,
+            })
 
         tool_calls = extract_tool_calls(assistant_message)
         if not tool_calls:
@@ -70,26 +84,56 @@ async def agent_loop(
                 )
                 continue
 
-            decision = check_permission(tool, call["input"])
-            if decision.behavior == "deny":
-                tool_results.append(
-                    format_error_result(call["id"], decision.reason)
-                )
-                continue
+            # 权限判定：只读自动通过，plan mode 禁止写入
+            if tool.is_read_only():
+                pass
+            else:
+                decision = check_permission(tool, call["input"], mode=permission_mode)
+                if decision.behavior == "deny":
+                    tool_results.append(
+                        format_error_result(call["id"], decision.reason)
+                    )
+                    continue
+                if decision.behavior == "ask":
+                    if ask_callback:
+                        approved = await ask_callback(tool.name, decision.reason, call["input"])
+                        if not approved:
+                            tool_results.append(
+                                format_error_result(call["id"], "用户拒绝了此操作")
+                            )
+                            continue
 
-            if decision.behavior == "ask":
-                if ask_callback:
-                    approved = await ask_callback(tool.name, decision.reason)
-                    if not approved:
-                        tool_results.append(
-                            format_error_result(call["id"], "用户拒绝了此操作")
-                        )
-                        continue
+            # 通知：工具开始执行
+            t0 = time.time()
+            if on_event:
+                await on_event("tool_start", {
+                    "name": call["name"],
+                    "input": call["input"],
+                    "turn": _turn + 1,
+                })
 
             try:
                 result = await tool.call(call["input"])
+                elapsed = time.time() - t0
+                summary, extra = _summarize_result(call["name"], result)
+                if on_event:
+                    await on_event("tool_end", {
+                        "name": call["name"],
+                        "elapsed": elapsed,
+                        "is_error": result.get("isError", False),
+                        "result_summary": summary,
+                        **extra,
+                    })
                 tool_results.append(format_tool_result(call["id"], result))
             except Exception as exc:
+                elapsed = time.time() - t0
+                if on_event:
+                    await on_event("tool_end", {
+                        "name": call["name"],
+                        "elapsed": elapsed,
+                        "is_error": True,
+                        "result_summary": str(exc)[:100],
+                    })
                 tool_results.append(
                     format_error_result(call["id"], f"Tool error: {exc}")
                 )
@@ -98,3 +142,38 @@ async def agent_loop(
             messages.append(tr)
 
     return {"messages": messages, "reason": "max_turns"}
+
+
+def _summarize_result(tool_name: str, result: dict) -> tuple[str, dict]:
+    """Generate a one-line summary and extra data (like search titles)."""
+    extra = {}
+    if result.get("isError"):
+        err = (result.get("error") or result.get("stderr") or "未知错误")
+        # 去掉换行，截断
+        err = str(err).replace("\n", " ")[:80]
+        return err, extra
+    if tool_name == "search_web":
+        n = len(result.get("results", []))
+        extra["result_titles"] = [r.get("title", "") for r in result.get("results", [])]
+        return f"找到 {n} 条搜索结果", extra
+    if tool_name == "read_url":
+        content = result.get("content", "")
+        return f"读取网页，{len(content)} 字符", extra
+    if tool_name == "analyze_github_repo":
+        content = result.get("content", "")
+        return f"分析仓库，{len(content)} 字符", extra
+    if tool_name == "file_write":
+        return f"写入文件 {result.get('path', '?')}", extra
+    if tool_name == "file_read":
+        content = result.get("content", "")
+        return f"读取文件，{len(content)} 字符", extra
+    if tool_name == "run_code":
+        stdout = result.get("stdout", "")
+        returncode = result.get("returncode", "?")
+        return f"执行完毕 (exit={returncode})，输出 {len(stdout)} 字符", extra
+    if tool_name == "list_files":
+        files = result.get("files", "")
+        return f"列出文件" + (f"：{files[:60]}" if files else "（空）"), extra
+    if tool_name == "learning_todo_write":
+        return f"保存 {result.get('count', 0)} 项学习任务", extra
+    return "完成", extra

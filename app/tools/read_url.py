@@ -60,7 +60,7 @@ class RealReadUrl(Tool):
 
             async with httpx.AsyncClient(timeout=self._timeout, follow_redirects=True) as client:
                 response = await client.get(url, headers={
-                    "User-Agent": "LearnAgent/0.1",
+                    "User-Agent": "Mozilla/5.0 (compatible; LearnAgent/0.2; +https://github.com/DengYijunX/LearnAgent)",
                     "Accept": "text/html,application/xhtml+xml",
                 })
                 response.raise_for_status()
@@ -85,19 +85,36 @@ class RealReadUrl(Tool):
 
     @staticmethod
     def _extract_title(html: str) -> str:
-        match = re.search(r"<title[^>]*>(.*?)</title>", html, re.IGNORECASE | re.DOTALL)
-        if match:
-            return match.group(1).strip()[:200]
-        return ""
+        try:
+            from bs4 import BeautifulSoup
+            soup = BeautifulSoup(html, "html.parser")
+            t = soup.title
+            return t.get_text(strip=True)[:200] if t else ""
+        except Exception:
+            match = re.search(r"<title[^>]*>(.*?)</title>", html, re.IGNORECASE | re.DOTALL)
+            return match.group(1).strip()[:200] if match else ""
 
     @staticmethod
     def _extract_text(html: str) -> str:
-        # Remove scripts and styles
-        html = re.sub(r"<(script|style|noscript|iframe)[^>]*>.*?</\1>", "", html, flags=re.IGNORECASE | re.DOTALL)
-        # Remove HTML tags
-        text = re.sub(r"<[^>]+>", " ", html)
-        # Collapse whitespace
-        text = re.sub(r"\s+", " ", text)
-        # Decode common entities
-        text = text.replace("&amp;", "&").replace("&lt;", "<").replace("&gt;", ">").replace("&quot;", '"').replace("&#39;", "'").replace("&nbsp;", " ")
-        return text.strip()
+        try:
+            from bs4 import BeautifulSoup
+            soup = BeautifulSoup(html, "html.parser")
+            # 移除不需要的标签
+            for tag in soup(["script", "style", "noscript", "iframe", "nav", "footer", "header", "aside"]):
+                tag.decompose()
+            # 优先提取 <main> 或 <article> 内容
+            main = soup.find("main") or soup.find("article") or soup.find("body")
+            if main:
+                text = main.get_text(separator="\n", strip=True)
+            else:
+                text = soup.get_text(separator="\n", strip=True)
+            # 清理空白行
+            lines = [l.strip() for l in text.split("\n") if l.strip()]
+            return "\n".join(lines)
+        except Exception:
+            # regex fallback
+            html = re.sub(r"<(script|style|noscript|iframe)[^>]*>.*?</\1>", "", html, flags=re.IGNORECASE | re.DOTALL)
+            text = re.sub(r"<[^>]+>", " ", html)
+            text = re.sub(r"\s+", " ", text)
+            text = text.replace("&amp;", "&").replace("&lt;", "<").replace("&gt;", ">").replace("&quot;", '"').replace("&#39;", "'").replace("&nbsp;", " ")
+            return text.strip()

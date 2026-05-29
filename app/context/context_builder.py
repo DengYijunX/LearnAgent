@@ -1,8 +1,16 @@
 """上下文构造器 —— 组装 Static Context + Dynamic Context + Skill。"""
 
+import platform
 
-STATIC_CONTEXT = """你是 LearnAgent，一个面向自学者的 AI 学习助手。
+_PLATFORM_INFO = f"""当前运行平台：{platform.system()}。
+- 文件路径使用 {'反斜杠' if platform.system() == 'Windows' else '正斜杠'}
+- Python 命令：{'python 或 py' if platform.system() == 'Windows' else 'python3'}
+- 不要使用 cd、timeout 等 Unix 命令在 Windows 上"""
+
+STATIC_CONTEXT = f"""你是 LearnAgent，一个面向自学者的 AI 学习助手。
 你的目标是帮助用户完成：发现 → 理解 → 实践 → 复盘 的学习闭环。
+
+{_PLATFORM_INFO}
 
 原则：
 1. 先解释核心概念，再给例子。
@@ -10,7 +18,10 @@ STATIC_CONTEXT = """你是 LearnAgent，一个面向自学者的 AI 学习助手
 3. 不要假装读过资料。
 4. 学习内容要分层递进。
 5. 需要时生成练习任务。
-6. 回复使用中文。"""
+6. 回复使用中文。
+7. 创建学习项目文件时，禁止使用 app.py 或 main.py 作为文件名！
+   这些文件名会与系统冲突。必须使用描述性文件名。
+   正确示例：learn_flask.py、flask_demo.py、hello_server.py"""
 
 
 def build_system_prompt(
@@ -18,6 +29,7 @@ def build_system_prompt(
     intent: str | None = None,
     user_level: str | None = None,
     skill_body: str | None = None,
+    plan_mode: bool = False,
 ) -> str:
     parts = [STATIC_CONTEXT]
 
@@ -34,5 +46,10 @@ def build_system_prompt(
 
     if skill_body:
         parts.append(f"\n<SKILL>\n{skill_body}\n</SKILL>")
+
+    if plan_mode:
+        parts.append("\n<PLAN_MODE>\n当前处于计划模式：你只能搜索和阅读资料，不能写文件或执行代码。"
+                      "你的任务是充分探索后，输出一份清晰的学习计划（Markdown格式），"
+                      "包含步骤、需要用到的工具、预期产出。用户确认后才会切换到执行模式。\n</PLAN_MODE>")
 
     return "\n\n".join(parts)

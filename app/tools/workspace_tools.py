@@ -42,9 +42,15 @@ class FileWrite(Tool):
     def is_read_only(self) -> bool:
         return False
 
+    RESERVED_NAMES = {"app.py", "main.py"}
+
     async def call(self, tool_input: dict, context: dict | None = None) -> dict:
         path = tool_input.get("path", "")
         content = tool_input.get("content", "")
+        # 拒绝保留文件名
+        basename = os.path.basename(path)
+        if basename.lower() in self.RESERVED_NAMES:
+            return {"isError": True, "error": f"禁止使用保留文件名 {basename}。请用描述性名称如 learn_flask.py"}
         safe = _safe_path(self._root, path)
         if safe is None:
             return {"isError": True, "error": f"路径非法或试图逃逸 workspace：{path}"}
@@ -100,24 +106,61 @@ class RunCode(Tool):
         "required": ["command"],
     }
 
-    def __init__(self, workspace_root: str, timeout: int = 10, max_output: int = 5000):
+    def __init__(self, workspace_root: str, timeout: int = 10, max_output: int = 5000, use_docker: bool = False):
         self._root = workspace_root
         self._timeout = timeout
         self._max_output = max_output
+        self._use_docker = use_docker
 
     def is_read_only(self) -> bool:
         return False
+
+    DANGEROUS = [
+        "rm -rf", "rm -r", "sudo", "shutdown", "reboot", "format",
+        "> /dev/sda", "mkfs", "dd if=", ":(){ :|:& };:",
+        "python -m venv", "virtualenv", "pipenv", "poetry new",
+        "git push", "git reset --hard", "git clean",
+    ]
 
     async def call(self, tool_input: dict, context: dict | None = None) -> dict:
         command = tool_input.get("command", "")
         if not command.strip():
             return {"isError": True, "error": "请提供要执行的命令。"}
+        cmd_lower = command.lower()
+        for d in self.DANGEROUS:
+            if d in cmd_lower:
+                return {"isError": True, "error": f"禁止执行危险或不需要的命令（含 '{d}'）。请用其他方式。"}
+
+        if self._use_docker:
+            return await self._docker_exec(command)
+        return await self._subprocess_exec(command)
+
+    async def _docker_exec(self, command: str) -> dict:
+        """在 Docker 容器中执行命令（沙箱隔离）。"""
+        abs_root = os.path.abspath(self._root)
+        # Escape double quotes in command for bash -c
+        escaped = command.replace('\\', '\\\\').replace('"', '\\"')
+        docker_cmd = (
+            f"docker run --rm "
+            f"--memory=256m --cpus=1 "
+            f"--network=none "
+            f"-v \"{abs_root}:/workspace\" "
+            f"-w /workspace "
+            f"python:3.11-slim bash -c \"{escaped}\""
+        )
+        return await self._subprocess_exec(docker_cmd)
+
+    async def _subprocess_exec(self, command: str) -> dict:
         try:
+            env = os.environ.copy()
+            existing = env.get("PYTHONPATH", "")
+            env["PYTHONPATH"] = self._root + (os.pathsep + existing if existing else "")
             proc = await asyncio.create_subprocess_shell(
                 command,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
                 cwd=self._root,
+                env=env,
             )
             try:
                 stdout, stderr = await asyncio.wait_for(
@@ -129,11 +172,9 @@ class RunCode(Tool):
                 except Exception:
                     pass
                 try:
-                    stdout, stderr = await asyncio.wait_for(
-                        proc.communicate(), timeout=5
-                    )
+                    stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=5)
                 except asyncio.TimeoutError:
-                    stdout, stderr = b"", "(进程未能终止)".encode()
+                    stdout, stderr = b"", b"(process not terminated)".encode()
                 return {
                     "isError": True,
                     "error": f"命令超时（{self._timeout}s）：{command[:80]}",
