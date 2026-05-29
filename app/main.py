@@ -12,6 +12,11 @@ import os
 import sys
 import time
 
+try:
+    import msvcrt  # Windows only
+except ImportError:
+    msvcrt = None
+
 from app.config.settings import get_config
 from app.llm.mock_client import MockLLMClient
 from app.llm.model_selector import ModelSelector
@@ -227,6 +232,25 @@ def _find_last_text(messages: list[dict]) -> str | None:
     return None
 
 
+def _maybe_merge_pasted_lines(first_line: str) -> str:
+    """检测 stdin 缓冲区是否有粘贴的剩余行，有则拼接为一条消息。"""
+    if msvcrt is None:
+        return first_line  # 非 Windows，不做检测
+    try:
+        extra_lines = []
+        while msvcrt.kbhit():
+            extra = input()
+            if extra.strip():
+                extra_lines.append(extra.strip())
+        if extra_lines:
+            merged = first_line + "\n" + "\n".join(extra_lines)
+            print(f"  (已合并 {len(extra_lines) + 1} 行输入)")
+            return merged
+    except Exception:
+        pass
+    return first_line
+
+
 async def main():
     use_real = "--real" in sys.argv
     resume_id = None
@@ -248,15 +272,31 @@ async def main():
         print(f"  session: {engine.session_id[:12]}")
     print(f"  输入问题开始学习 · /help 查看命令\n")
 
+    _ctrl_c_time = 0.0
+
     while True:
         try:
             user_input = input("> ").strip()
-        except (EOFError, KeyboardInterrupt):
+        except KeyboardInterrupt:
+            now = time.time()
+            if _ctrl_c_time > 0 and now - _ctrl_c_time < 2:
+                print("\n再见！")
+                break
+            _ctrl_c_time = now
+            sys.stdout.write("\r  \x1b[90m(再按一次 Ctrl+C 退出)\x1b[0m\n")
+            sys.stdout.flush()
+            continue
+        except EOFError:
             print("\n再见！")
             break
 
+        _ctrl_c_time = 0.0  # 正常输入后重置
+
         if not user_input:
             continue
+
+        # 多行粘贴检测：Windows 下用 msvcrt.kbhit()
+        user_input = _maybe_merge_pasted_lines(user_input)
 
         # 命令处理
         if user_input.startswith("/"):

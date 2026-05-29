@@ -113,11 +113,16 @@ class RunCode(Tool):
         if not command.strip():
             return {"isError": True, "error": "请提供要执行的命令。"}
         try:
+            env = os.environ.copy()
+            # 确保子进程优先搜索 workspace 目录
+            existing = env.get("PYTHONPATH", "")
+            env["PYTHONPATH"] = self._root + (os.pathsep + existing if existing else "")
             proc = await asyncio.create_subprocess_shell(
                 command,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
                 cwd=self._root,
+                env=env,
             )
             try:
                 stdout, stderr = await asyncio.wait_for(
