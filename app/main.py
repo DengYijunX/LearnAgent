@@ -337,7 +337,8 @@ async def main():
             intent = route["intent"]
             topic = route.get("topic")
             elapsed = time.time() - t0
-            sys.stdout.write(f"\r  意图: {intent} · 主题: {topic or '无'}  ({elapsed:.1f}s)\n")
+            plan_tag = " [plan]" if engine.permission_mode == "plan" else ""
+            sys.stdout.write(f"\r  意图: {intent} · 主题: {topic or '无'}{plan_tag}  ({elapsed:.1f}s)\n")
             sys.stdout.flush()
         else:
             from app.core.router import InputRouter

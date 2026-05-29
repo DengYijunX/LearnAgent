@@ -47,6 +47,7 @@ async def agent_loop(
     max_turns: int = 8,
     ask_callback=None,
     on_event=None,
+    permission_mode: str = "default",
 ) -> dict:
     for _turn in range(max_turns):
         # 通知：开始思考
@@ -83,12 +84,11 @@ async def agent_loop(
                 )
                 continue
 
-            # 只读工具自动允许，写入/执行工具才询问
+            # 权限判定：只读自动通过，plan mode 禁止写入
             if tool.is_read_only():
-                # 自动通过，不弹确认
                 pass
             else:
-                decision = check_permission(tool, call["input"])
+                decision = check_permission(tool, call["input"], mode=permission_mode)
                 if decision.behavior == "deny":
                     tool_results.append(
                         format_error_result(call["id"], decision.reason)

@@ -17,6 +17,7 @@ INTENT_TO_SKILL = {
 SLASH_COMMANDS = {
     "/help": "显示可用命令",
     "/clear": "清空当前会话",
+    "/plan": "进入/退出计划模式（只读探索→确认→执行）",
     "/topic": "查看或切换当前学习主题",
     "/progress": "查看学习任务进度",
     "/sessions": "列出历史会话",
@@ -43,6 +44,7 @@ class LearnQueryEngine:
         self.messages: list[dict] = []
         self.session_id = uuid.uuid4().hex[:12]
         self.current_topic: str | None = None
+        self.permission_mode: str = "default"  # "default" | "plan"
         self.started_at = time.time()
         self._ask_callback = None
         self._on_event = None
@@ -108,6 +110,7 @@ class LearnQueryEngine:
             current_topic=self.current_topic,
             intent=intent,
             skill_body=skill_body,
+            plan_mode=(self.permission_mode == "plan"),
         )
 
         result = await agent_loop(
@@ -118,6 +121,7 @@ class LearnQueryEngine:
             max_turns=8,
             ask_callback=self._ask_callback if self._ask_callback else None,
             on_event=self._on_event if self._on_event else None,
+            permission_mode=self.permission_mode,
         )
 
         if self.session_store:
@@ -221,6 +225,13 @@ class LearnQueryEngine:
             for e in entries[-10:]:
                 lines.append(f"  - {e['description']}")
             return {"type": "command", "content": "\n".join(lines)}
+
+        if cmd == "/plan":
+            if self.permission_mode == "plan":
+                self.permission_mode = "default"
+                return {"type": "command", "content": "已退出计划模式。现在可以执行写入和代码运行操作。"}
+            self.permission_mode = "plan"
+            return {"type": "command", "content": "已进入计划模式。只允许搜索、阅读等只读操作。确认计划后再次输入 /plan 退出。"}
 
         if cmd == "/exit":
             return {"type": "command", "content": "再见！"}

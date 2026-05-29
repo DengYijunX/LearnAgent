@@ -29,6 +29,7 @@ def build_system_prompt(
     intent: str | None = None,
     user_level: str | None = None,
     skill_body: str | None = None,
+    plan_mode: bool = False,
 ) -> str:
     parts = [STATIC_CONTEXT]
 
@@ -45,5 +46,10 @@ def build_system_prompt(
 
     if skill_body:
         parts.append(f"\n<SKILL>\n{skill_body}\n</SKILL>")
+
+    if plan_mode:
+        parts.append("\n<PLAN_MODE>\n当前处于计划模式：你只能搜索和阅读资料，不能写文件或执行代码。"
+                      "你的任务是充分探索后，输出一份清晰的学习计划（Markdown格式），"
+                      "包含步骤、需要用到的工具、预期产出。用户确认后才会切换到执行模式。\n</PLAN_MODE>")
 
     return "\n\n".join(parts)
