@@ -114,10 +114,21 @@ class RunCode(Tool):
     def is_read_only(self) -> bool:
         return False
 
+    DANGEROUS = [
+        "rm -rf", "rm -r", "sudo", "shutdown", "reboot", "format",
+        "> /dev/sda", "mkfs", "dd if=", ":(){ :|:& };:",
+        "python -m venv", "virtualenv", "pipenv", "poetry new",
+        "git push", "git reset --hard", "git clean",
+    ]
+
     async def call(self, tool_input: dict, context: dict | None = None) -> dict:
         command = tool_input.get("command", "")
         if not command.strip():
             return {"isError": True, "error": "请提供要执行的命令。"}
+        cmd_lower = command.lower()
+        for d in self.DANGEROUS:
+            if d in cmd_lower:
+                return {"isError": True, "error": f"禁止执行危险或不需要的命令（含 '{d}'）。请用其他方式。"}
         try:
             env = os.environ.copy()
             # 确保子进程优先搜索 workspace 目录
