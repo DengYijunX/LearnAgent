@@ -30,6 +30,7 @@ from app.core.llm_router import LLMRouter
 from app.core.query_engine import LearnQueryEngine, INTENT_TO_SKILL
 from app.memory.session_store import SessionStore
 from app.memory.memory_store import MemoryStore
+from app.mcp.loader import load_mcp_tools
 
 
 def _get_workspace_dir(storage_base: str, topic: str | None) -> str:
@@ -48,7 +49,7 @@ def _register_workspace_tools(tools: ToolRegistry, workspace_dir: str):
     tools.register(ListFiles(workspace_root=workspace_dir))
 
 
-def build_engine(use_real: bool = False, resume_id: str | None = None):
+async def build_engine(use_real: bool = False, resume_id: str | None = None):
     cfg = get_config()
     storage_base = cfg.storage_base_dir
     session_store = SessionStore(base_dir=os.path.join(storage_base, "sessions"))
@@ -65,6 +66,9 @@ def build_engine(use_real: bool = False, resume_id: str | None = None):
         tools.register(MockGitHubAnalyzer())
     tools.register(LearningTodoWrite())
     _register_workspace_tools(tools, _get_workspace_dir(storage_base, None))
+
+    # MCP 工具加载
+    mcp_servers = await load_mcp_tools(tools)
 
     if use_real:
         from app.llm.deepseek_client import DeepSeekLLMClient
@@ -270,7 +274,7 @@ async def main():
         if idx + 1 < len(sys.argv):
             resume_id = sys.argv[idx + 1]
 
-    engine = build_engine(use_real=use_real, resume_id=resume_id)
+    engine = await build_engine(use_real=use_real, resume_id=resume_id)
     engine.set_ask_callback(ask_permission)
     engine.set_on_event(on_event)
 
