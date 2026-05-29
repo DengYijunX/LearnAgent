@@ -42,9 +42,15 @@ class FileWrite(Tool):
     def is_read_only(self) -> bool:
         return False
 
+    RESERVED_NAMES = {"app.py", "main.py"}
+
     async def call(self, tool_input: dict, context: dict | None = None) -> dict:
         path = tool_input.get("path", "")
         content = tool_input.get("content", "")
+        # 拒绝保留文件名
+        basename = os.path.basename(path)
+        if basename.lower() in self.RESERVED_NAMES:
+            return {"isError": True, "error": f"禁止使用保留文件名 {basename}。请用描述性名称如 learn_flask.py"}
         safe = _safe_path(self._root, path)
         if safe is None:
             return {"isError": True, "error": f"路径非法或试图逃逸 workspace：{path}"}

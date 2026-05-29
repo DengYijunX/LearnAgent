@@ -13,9 +13,9 @@ class TestFileWrite:
         from app.tools.workspace_tools import FileWrite
 
         tool = FileWrite(workspace_root=workspace)
-        result = await tool.call({"path": "main.py", "content": "print('hello')"})
+        result = await tool.call({"path": "test_write.py", "content": "print('hello')"})
         assert result.get("isError") is False
-        assert os.path.exists(os.path.join(workspace, "main.py"))
+        assert os.path.exists(os.path.join(workspace, "test_write.py"))
 
     @pytest.mark.asyncio
     async def test_creates_subdirectories(self, workspace):

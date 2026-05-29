@@ -115,7 +115,14 @@ def _resume_session(engine, session_store, storage_base, resume_id: str):
         print(f"  上一次主题：{engine.current_topic}")
 
 
+_trust_window = {"active": False, "expires_at": 0.0}
+
 async def ask_permission(tool_name: str, reason: str, tool_input: dict | None = None) -> bool:
+    global _trust_window
+    now = time.time()
+    if _trust_window["active"] and now < _trust_window["expires_at"]:
+        if tool_name in ("file_write", "run_code"):
+            return True
     name_cn = {"file_write": "写入文件", "run_code": "执行代码", "learning_todo_write": "保存学习任务"}.get(tool_name, tool_name)
     print(f"\n  ⚠ {name_cn}")
     if tool_input:
@@ -125,8 +132,12 @@ async def ask_permission(tool_name: str, reason: str, tool_input: dict | None = 
                 v_str = v_str[:100] + "..."
             print(f"     {k}: {v_str}")
     try:
-        answer = input("     允许？(y/n): ").strip().lower()
-        return answer in ("y", "yes", "")
+        answer = input("     允许？(y/n，同类操作60s免确认): ").strip().lower()
+        if answer in ("y", "yes", ""):
+            _trust_window["active"] = True
+            _trust_window["expires_at"] = time.time() + 60
+            return True
+        return False
     except (EOFError, KeyboardInterrupt):
         return False
 
@@ -337,9 +348,16 @@ async def main():
 
         # 提交到 QueryEngine
         t_round = time.time()
-        result = await engine.submit_message(user_input, topic=topic, intent=intent)
+        try:
+            result = await engine.submit_message(user_input, topic=topic, intent=intent)
+        except asyncio.CancelledError:
+            print("\n  操作已取消。")
+            continue
+        except Exception:
+            print("\n  操作中断，请重试。")
+            continue
 
-        # topic 切换 → 同步 workspace
+        # topic 切换
         if result.get("topic_change"):
             ws_dir = _get_workspace_dir(get_config().storage_base_dir, engine.current_topic)
             _register_workspace_tools(engine.tools, ws_dir)
