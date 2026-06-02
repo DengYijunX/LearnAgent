@@ -1,5 +1,8 @@
 import json
+import logging
 from app.llm.base import LLMClient
+
+logger = logging.getLogger(__name__)
 
 
 def _sanitize_str(s: str) -> str:
@@ -16,6 +19,32 @@ def _sanitize(obj):
     if isinstance(obj, list):
         return [_sanitize(item) for item in obj]
     return obj
+
+
+def _validate_message_seq(messages: list[dict]) -> list[str]:
+    """Validate tool message sequence — every tool result must have a
+    matching tool_call in some preceding assistant message."""
+    issues = []
+    for i, m in enumerate(messages):
+        if m.get("role") == "tool":
+            tcid = m.get("tool_call_id", "")
+            if not tcid:
+                issues.append(f"msg[{i}]: tool message has empty tool_call_id")
+            else:
+                found = False
+                for j in range(max(0, i - 20), i):
+                    for tc in messages[j].get("tool_calls", []):
+                        if tc.get("id") == tcid:
+                            found = True
+                            break
+                    if found:
+                        break
+                if not found:
+                    issues.append(
+                        f"msg[{i}]: orphan tool (id={tcid[:24]}), "
+                        f"no matching tool_calls in preceding 20 msgs"
+                    )
+    return issues
 
 
 class DeepSeekLLMClient(LLMClient):
@@ -62,6 +91,12 @@ class DeepSeekLLMClient(LLMClient):
             ]
 
         payload = _sanitize(payload)
+
+        # 检测孤立的 tool 消息（由 compaction 等 bug 导致）
+        issues = _validate_message_seq(payload["messages"])
+        if issues:
+            for iss in issues:
+                logger.warning("DeepSeek message seq: %s", iss)
 
         async with httpx.AsyncClient(timeout=60) as client:
             response = await client.post(
