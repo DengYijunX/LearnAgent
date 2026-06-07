@@ -5,6 +5,9 @@ Set RUN_REAL_TESTS=1 to enable.
 """
 
 import os
+import sys
+import types
+
 import pytest
 
 
@@ -77,6 +80,48 @@ class TestRealReadUrl:
         tool = RealReadUrl()
         result = await tool.call({})
         assert result.get("isError") is True
+
+    @pytest.mark.asyncio
+    async def test_retries_with_browser_headers_after_forbidden(self, monkeypatch):
+        from app.tools.read_url import RealReadUrl
+
+        requests = []
+
+        class FakeResponse:
+            def __init__(self, status_code, text):
+                self.status_code = status_code
+                self.text = text
+                self.headers = {}
+
+            def raise_for_status(self):
+                if self.status_code >= 400:
+                    raise RuntimeError(f"HTTP {self.status_code}")
+
+        class FakeAsyncClient:
+            def __init__(self, *args, **kwargs):
+                pass
+
+            async def __aenter__(self):
+                return self
+
+            async def __aexit__(self, exc_type, exc, tb):
+                return False
+
+            async def get(self, url, headers):
+                requests.append(headers)
+                if len(requests) == 1:
+                    return FakeResponse(403, "")
+                return FakeResponse(200, "<html><title>OK</title><main>正文</main></html>")
+
+        fake_httpx = types.SimpleNamespace(AsyncClient=FakeAsyncClient)
+        monkeypatch.setitem(sys.modules, "httpx", fake_httpx)
+
+        result = await RealReadUrl().call({"url": "https://example.com/protected"})
+
+        assert result.get("isError") is False
+        assert result["content"] == "正文"
+        assert len(requests) == 2
+        assert "Chrome/" in requests[1]["User-Agent"]
 
     def test_is_read_only(self):
         from app.tools.read_url import RealReadUrl

@@ -1,6 +1,8 @@
 """长期记忆存储 —— Markdown + YAML frontmatter 格式。"""
 
+import hashlib
 import os
+import re
 import yaml
 
 
@@ -11,6 +13,13 @@ class MemoryStore:
 
     def _path(self, name: str) -> str:
         safe = name.replace("/", "_").replace("\\", "_")
+        safe = re.sub(r'[<>:"|?*\x00-\x1f]', "_", safe)
+        safe = re.sub(r"_+", "_", safe).strip(" ._")
+        if not safe:
+            safe = "memory"
+        if safe != name.replace("/", "_").replace("\\", "_") or len(safe) > 180:
+            digest = hashlib.sha1(name.encode("utf-8")).hexdigest()[:10]
+            safe = f"{safe[:180]}_{digest}"
         return os.path.join(self._base_dir, f"{safe}.md")
 
     def save(self, name: str, memory_type: str, description: str, body: str) -> str:

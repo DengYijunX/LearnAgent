@@ -51,6 +51,15 @@ class TestMemoryStore:
         found = memory_store.find("m1")
         assert found["description"] == "v2"
 
+    def test_url_like_name_is_saved_with_safe_filename(self, memory_store):
+        name = "topic_https://example.com/docs?a=1&b=2"
+        path = memory_store.save(name, "learning", "url topic", "- url\n")
+
+        assert os.path.exists(path)
+        assert memory_store.find(name)["name"] == name
+        assert ":" not in os.path.basename(path)
+        assert "?" not in os.path.basename(path)
+
 
 import pytest
 

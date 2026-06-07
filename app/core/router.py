@@ -14,7 +14,7 @@ NOISE_SUFFIXES = ["学习", "入门", "教程", "怎么用", "怎么学", "是�
 
 
 def normalize_topic(raw: str | None) -> str | None:
-    """规范化 topic：小写、去前后缀噪声、空格→连字符。"""
+    """规范化 topic：小写、去前后缀噪声、空格→连字符、过滤文件系统非法字符。"""
     if not raw:
         return None
     t = raw.strip().lower()
@@ -33,6 +33,10 @@ def normalize_topic(raw: str | None) -> str | None:
     # 空格/斜杠换连字符
     t = re.sub(r"\s+", "-", t)
     t = t.replace("/", "-")
+    t = re.sub(r'[\\:*?"<>|]', "-", t)
+    t = re.sub(r"-{2,}", "-", t).strip("-")
+    if not t:
+        return None
     return t
 
 
