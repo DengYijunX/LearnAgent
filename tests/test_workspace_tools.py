@@ -42,6 +42,20 @@ class TestFileWrite:
         result = await tool.call({"path": "C:/windows/system32/test.txt", "content": "bad"})
         assert result.get("isError") is True
 
+    @pytest.mark.asyncio
+    async def test_rejects_storage_workspace_prefixed_path_with_guidance(self, workspace):
+        from app.tools.workspace_tools import FileWrite
+
+        tool = FileWrite(workspace_root=workspace)
+        result = await tool.call({
+            "path": "storage/workspace/transformer/self_attention_demo.py",
+            "content": "print('bad target')",
+        })
+
+        assert result.get("isError") is True
+        assert "workspace 内相对路径" in result["error"]
+        assert "self_attention_demo.py" in result["error"]
+
     def test_is_not_read_only(self):
         from app.tools.workspace_tools import FileWrite
 

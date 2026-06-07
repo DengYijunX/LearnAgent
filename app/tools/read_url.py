@@ -1,6 +1,7 @@
 """ReadUrl 工具 —— 读取网页内容。"""
 
 import re
+from urllib.parse import urljoin, urlparse
 
 from app.tools.base import Tool
 
@@ -75,6 +76,7 @@ class RealReadUrl(Tool):
 
             text = self._extract_text(html)
             title = self._extract_title(html)
+            links = self._extract_same_domain_links(html, url)
 
             if len(text) > self._max_len:
                 text = text[:self._max_len] + f"\n...(截断，原文共 {len(text)} 字符)"
@@ -84,6 +86,7 @@ class RealReadUrl(Tool):
                 "metadata": {
                     "title": title,
                     "source": url,
+                    "links": links,
                 },
                 "isError": False,
             }
@@ -125,3 +128,34 @@ class RealReadUrl(Tool):
             text = re.sub(r"\s+", " ", text)
             text = text.replace("&amp;", "&").replace("&lt;", "<").replace("&gt;", ">").replace("&quot;", '"').replace("&#39;", "'").replace("&nbsp;", " ")
             return text.strip()
+
+    @staticmethod
+    def _extract_same_domain_links(html: str, source_url: str, limit: int = 20) -> list[str]:
+        source_host = urlparse(source_url).netloc.lower()
+        if not source_host:
+            return []
+        links: list[str] = []
+        seen: set[str] = set()
+        try:
+            from bs4 import BeautifulSoup
+            soup = BeautifulSoup(html, "html.parser")
+            hrefs = [a.get("href", "") for a in soup.find_all("a")]
+        except Exception:
+            hrefs = re.findall(r'href=["\']([^"\']+)["\']', html, flags=re.IGNORECASE)
+
+        for href in hrefs:
+            href = href.strip()
+            if not href or href.startswith(("#", "mailto:", "javascript:")):
+                continue
+            absolute = urljoin(source_url, href)
+            parsed = urlparse(absolute)
+            if parsed.netloc.lower() != source_host:
+                continue
+            cleaned = parsed._replace(fragment="").geturl()
+            if cleaned in seen:
+                continue
+            seen.add(cleaned)
+            links.append(cleaned)
+            if len(links) >= limit:
+                break
+        return links

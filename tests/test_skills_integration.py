@@ -45,6 +45,30 @@ class TestSkillInjection:
         # Should not contain skill instructions
         assert "SKILL" not in prompt
 
+    def test_prompt_requires_answering_latest_user_request(self):
+        from app.context.context_builder import build_system_prompt
+
+        prompt = build_system_prompt(
+            current_topic="openclaw",
+            intent="chat",
+            skill_body=None,
+        )
+
+        assert "只回答用户最新输入" in prompt
+        assert "不要复用旧主题" in prompt
+
+    def test_prompt_requires_related_site_expansion(self):
+        from app.context.context_builder import build_system_prompt
+
+        prompt = build_system_prompt(
+            current_topic="https-example.com",
+            intent="read_url",
+            skill_body=None,
+        )
+
+        assert "相关网站" in prompt
+        assert "不能声称完整阅读" in prompt
+
 
 INTENT_TO_SKILL = {
     "learn_concept": "learn-concept",

@@ -31,6 +31,7 @@ from app.core.query_engine import LearnQueryEngine, INTENT_TO_SKILL
 from app.memory.session_store import SessionStore
 from app.memory.memory_store import MemoryStore
 from app.mcp.loader import load_mcp_tools
+from app.core.router import normalize_topic
 
 
 def _get_workspace_dir(storage_base: str, topic: str | None) -> str:
@@ -47,6 +48,20 @@ def _register_workspace_tools(tools: ToolRegistry, workspace_dir: str):
     tools.register(FileRead(workspace_root=workspace_dir))
     tools.register(RunCode(workspace_root=workspace_dir, timeout=30))
     tools.register(ListFiles(workspace_root=workspace_dir))
+
+
+def _sync_workspace_tools_for_route(
+    tools: ToolRegistry,
+    storage_base: str,
+    topic: str | None,
+    intent: str | None,
+) -> str | None:
+    normalized_topic = normalize_topic(topic)
+    if not normalized_topic or intent == "chat":
+        return None
+    workspace_dir = _get_workspace_dir(storage_base, normalized_topic)
+    _register_workspace_tools(tools, workspace_dir)
+    return workspace_dir
 
 
 async def build_engine(use_real: bool = False, resume_id: str | None = None):
@@ -131,10 +146,7 @@ async def ask_permission(tool_name: str, reason: str, tool_input: dict | None = 
     print(f"\n  ⚠ {name_cn}")
     if tool_input:
         for k, v in tool_input.items():
-            v_str = str(v)
-            if len(v_str) > 100:
-                v_str = v_str[:100] + "..."
-            print(f"     {k}: {v_str}")
+            print(f"     {k}: {_format_permission_value(k, v)}")
     try:
         answer = input("     允许？(y/n，同类操作60s免确认): ").strip().lower()
         if answer in ("y", "yes", ""):
@@ -144,6 +156,21 @@ async def ask_permission(tool_name: str, reason: str, tool_input: dict | None = 
         return False
     except (EOFError, KeyboardInterrupt):
         return False
+
+
+def _format_permission_value(key: str, value) -> str:
+    text = str(value)
+    if key == "command":
+        return text
+    if key == "content" and len(text) > 160:
+        return f"[{len(text)} 字符] {text[:80]} ... {text[-40:]}"
+    if key == "todos" and isinstance(value, list):
+        preview = "; ".join(str(item.get("content", item)) for item in value[:3])
+        suffix = f" ... 共 {len(value)} 项" if len(value) > 3 else ""
+        return preview + suffix
+    if len(text) > 160:
+        return f"{text[:120]} ... {text[-30:]}"
+    return text
 
 
 async def on_event(event_type: str, data: dict):
@@ -354,6 +381,12 @@ async def main():
         # 提交到 QueryEngine
         t_round = time.time()
         try:
+            _sync_workspace_tools_for_route(
+                tools=engine.tools,
+                storage_base=get_config().storage_base_dir,
+                topic=topic,
+                intent=intent,
+            )
             result = await engine.submit_message(user_input, topic=topic, intent=intent)
         except asyncio.CancelledError:
             print("\n  操作已取消。")

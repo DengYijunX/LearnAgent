@@ -141,6 +141,9 @@ async def agent_loop(
         for tr in tool_results:
             messages.append(tr)
 
+    fallback = _build_max_turns_fallback(messages)
+    if fallback:
+        messages.append({"role": "assistant", "content": fallback})
     return {"messages": messages, "reason": "max_turns"}
 
 
@@ -149,9 +152,7 @@ def _summarize_result(tool_name: str, result: dict) -> tuple[str, dict]:
     extra = {}
     if result.get("isError"):
         err = (result.get("error") or result.get("stderr") or "未知错误")
-        # 去掉换行，截断
-        err = str(err).replace("\n", " ")[:80]
-        return err, extra
+        return _compact_error_summary(str(err)), extra
     if tool_name == "search_web":
         n = len(result.get("results", []))
         extra["result_titles"] = [r.get("title", "") for r in result.get("results", [])]
@@ -177,3 +178,45 @@ def _summarize_result(tool_name: str, result: dict) -> tuple[str, dict]:
     if tool_name == "learning_todo_write":
         return f"保存 {result.get('count', 0)} 项学习任务", extra
     return "完成", extra
+
+
+def _compact_error_summary(error: str, max_length: int = 140) -> str:
+    """Keep the important tail of long path-heavy errors visible."""
+    err = error.replace("\n", " ")
+    if len(err) <= max_length:
+        return err
+    tail = err[-70:]
+    head = err[: max_length - len(tail) - 5]
+    return f"{head} ... {tail}"
+
+
+def _build_max_turns_fallback(messages: list[dict]) -> str | None:
+    tool_errors = []
+    successful_content = 0
+    for msg in messages:
+        if msg.get("role") != "tool":
+            continue
+        content = msg.get("content", "")
+        parsed = None
+        if isinstance(content, str):
+            try:
+                parsed = json.loads(content)
+            except json.JSONDecodeError:
+                if msg.get("is_error"):
+                    tool_errors.append(content)
+        if isinstance(parsed, dict):
+            if parsed.get("isError"):
+                tool_errors.append(str(parsed.get("error") or parsed.get("stderr") or "工具失败"))
+            else:
+                successful_content += len(str(parsed.get("content") or parsed.get("results") or ""))
+
+    if not tool_errors or successful_content >= 200:
+        return None
+
+    shown = "\n".join(f"- {_compact_error_summary(e, 110)}" for e in tool_errors[-3:])
+    return (
+        "资料不足，当前无法可靠确认结论。\n\n"
+        "本轮检索或读取没有拿到足够可用内容，主要失败信息：\n"
+        f"{shown}\n\n"
+        "建议换一个更具体的问题、提供可访问的资料链接，或稍后重试搜索/网页读取。"
+    )
