@@ -29,6 +29,11 @@ class TestTopicNormalization:
         assert normalize_topic("Rust async/await") == "rust-async-await"
         assert normalize_topic("Python 协程") == "python-协程"
 
+    def test_filesystem_unsafe_characters_are_normalized(self):
+        from app.core.router import normalize_topic
+
+        assert normalize_topic("https://example.com/docs?a=1") == "https-example.com-docs-a=1"
+
     def test_empty_returns_none(self):
         from app.core.router import normalize_topic
 
