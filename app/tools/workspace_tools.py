@@ -47,6 +47,16 @@ class FileWrite(Tool):
     async def call(self, tool_input: dict, context: dict | None = None) -> dict:
         path = tool_input.get("path", "")
         content = tool_input.get("content", "")
+        normalized_input = path.replace("\\", "/").lstrip("./")
+        if normalized_input.startswith("storage/workspace/"):
+            basename_hint = os.path.basename(normalized_input)
+            return {
+                "isError": True,
+                "error": (
+                    "请只提供 workspace 内相对路径，不要包含 storage/workspace 前缀。"
+                    f"例如：{basename_hint or 'example.py'}"
+                ),
+            }
         # 拒绝保留文件名
         basename = os.path.basename(path)
         if basename.lower() in self.RESERVED_NAMES:

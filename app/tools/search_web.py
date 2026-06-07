@@ -1,6 +1,17 @@
 """SearchWeb 工具 —— 搜索技术资料。"""
 
+from urllib.parse import urlparse
+
 from app.tools.base import Tool
+
+
+UNSAFE_TITLE_KEYWORDS = (
+    "暗网", "深网", "黑料", "吃瓜", "成人", "黄网站", "博彩", "赌场",
+    "dvaj", "porn", "sex", "xxx", "casino", "bet365",
+)
+UNSAFE_DOMAINS = (
+    "adult.example", "bad.example",
+)
 
 
 class MockSearchWeb(Tool):
@@ -54,16 +65,34 @@ class RealSearchWeb(Tool):
             from ddgs import DDGS
 
             results = []
+            filtered_count = 0
             with DDGS() as ddgs:
                 for r in ddgs.text(query, max_results=self._max_results):
-                    results.append({
+                    item = {
                         "title": r.get("title", ""),
                         "url": r.get("href", ""),
                         "snippet": r.get("body", ""),
-                    })
+                    }
+                    if _is_unsafe_result(item):
+                        filtered_count += 1
+                        continue
+                    results.append(item)
             return {
                 "results": results,
+                "filtered_count": filtered_count,
                 "isError": False,
             }
         except Exception as e:
             return {"isError": True, "error": f"搜索失败：{e}"}
+
+
+def _is_unsafe_result(result: dict) -> bool:
+    title = str(result.get("title") or "").lower()
+    snippet = str(result.get("snippet") or "").lower()
+    url = str(result.get("url") or "")
+    host = urlparse(url).netloc.lower()
+
+    haystack = f"{title} {snippet}"
+    if any(keyword in haystack for keyword in UNSAFE_TITLE_KEYWORDS):
+        return True
+    return any(host == domain or host.endswith(f".{domain}") for domain in UNSAFE_DOMAINS)

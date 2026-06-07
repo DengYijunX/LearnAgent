@@ -46,6 +46,32 @@ class TestRealSearchWeb:
         result = await tool.call({"query": ""})
         assert result.get("isError") is True
 
+    @pytest.mark.asyncio
+    async def test_filters_unsafe_search_results(self, monkeypatch):
+        from app.tools.search_web import RealSearchWeb
+
+        class FakeDDGS:
+            def __enter__(self):
+                return self
+
+            def __exit__(self, exc_type, exc, tb):
+                return False
+
+            def text(self, query, max_results):
+                return [
+                    {"title": "51暗网 - 深网稀缺资源爆料平台", "href": "https://bad.example", "body": "bad"},
+                    {"title": "华南师范大学就业创业信息网", "href": "https://career.scnu.edu.cn", "body": "official"},
+                    {"title": "DVAJ-633 unsafe adult result", "href": "https://adult.example", "body": "bad"},
+                ]
+
+        monkeypatch.setitem(sys.modules, "ddgs", types.SimpleNamespace(DDGS=FakeDDGS))
+
+        result = await RealSearchWeb(max_results=5).call({"query": "华南师范大学 校招"})
+
+        assert result.get("isError") is False
+        assert result.get("filtered_count") == 2
+        assert [r["title"] for r in result["results"]] == ["华南师范大学就业创业信息网"]
+
     def test_is_read_only(self):
         from app.tools.search_web import RealSearchWeb
 
@@ -122,6 +148,46 @@ class TestRealReadUrl:
         assert result["content"] == "正文"
         assert len(requests) == 2
         assert "Chrome/" in requests[1]["User-Agent"]
+
+    @pytest.mark.asyncio
+    async def test_extracts_same_domain_links_for_related_reading(self, monkeypatch):
+        from app.tools.read_url import RealReadUrl
+
+        class FakeResponse:
+            status_code = 200
+            headers = {}
+            text = """
+            <html><title>Links</title><body>
+              <a href="/wiki/Human">Human</a>
+              <a href="https://example.com/wiki/Origin">Origin</a>
+              <a href="https://other.example/out">Other</a>
+            </body></html>
+            """
+
+            def raise_for_status(self):
+                pass
+
+        class FakeAsyncClient:
+            def __init__(self, *args, **kwargs):
+                pass
+
+            async def __aenter__(self):
+                return self
+
+            async def __aexit__(self, exc_type, exc, tb):
+                return False
+
+            async def get(self, url, headers):
+                return FakeResponse()
+
+        monkeypatch.setitem(sys.modules, "httpx", types.SimpleNamespace(AsyncClient=FakeAsyncClient))
+
+        result = await RealReadUrl().call({"url": "https://example.com/wiki/Page"})
+
+        links = result["metadata"]["links"]
+        assert "https://example.com/wiki/Human" in links
+        assert "https://example.com/wiki/Origin" in links
+        assert "https://other.example/out" not in links
 
     def test_is_read_only(self):
         from app.tools.read_url import RealReadUrl

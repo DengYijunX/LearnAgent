@@ -107,6 +107,51 @@ class TestAgentLoop:
         assert "user" in roles
         assert "assistant" in roles
 
+    @pytest.mark.asyncio
+    async def test_adds_fallback_when_tools_fail_and_turns_exhausted(self):
+        from app.llm.base import LLMClient
+        from app.tools.base import Tool
+        from app.tools.registry import ToolRegistry
+        from app.core.agent_loop import agent_loop
+
+        class ToolCallingLLM(LLMClient):
+            async def chat(self, messages, system=None, tools=None, max_tokens=4096):
+                return {
+                    "role": "assistant",
+                    "content": "",
+                    "tool_calls": [{
+                        "id": "call_1",
+                        "type": "function",
+                        "function": {
+                            "name": "read_url",
+                            "arguments": '{"url":"https://example.com"}',
+                        },
+                    }],
+                }
+
+            async def stream_chat(self, messages, system=None, tools=None):
+                yield {}
+
+        class FailingReadUrl(Tool):
+            name = "read_url"
+            description = "fails"
+            input_schema = {}
+
+            async def call(self, tool_input, context=None):
+                return {"isError": True, "error": "读取失败：timeout"}
+
+        tools = ToolRegistry()
+        tools.register(FailingReadUrl())
+        messages = [{"role": "user", "content": "这里面最近的进展是什么"}]
+
+        result = await agent_loop(messages=messages, llm=ToolCallingLLM(), tools=tools, max_turns=1)
+
+        assert result["reason"] == "max_turns"
+        final = result["messages"][-1]
+        assert final["role"] == "assistant"
+        assert "资料不足" in final["content"]
+        assert "读取失败" in final["content"]
+
 
 class TestToolResultFormatter:
     def test_format_tool_result(self):
@@ -131,3 +176,19 @@ class TestToolResultFormatter:
         assert formatted["tool_call_id"] == "call_456"
         assert formatted["is_error"] is True
         assert "Something went wrong" in formatted["content"]
+
+
+class TestToolResultSummary:
+    def test_error_summary_preserves_path_tail(self):
+        from app.core.agent_loop import _summarize_result
+
+        summary, _extra = _summarize_result(
+            "file_write",
+            {
+                "isError": True,
+                "error": "写入失败：[Errno 13] Permission denied: 'E:\\code\\p\\pro\\LearnAgent\\storage\\workspace\\transformer\\self_attention_demo.py'",
+            },
+        )
+
+        assert "Permission denied" in summary
+        assert "self_attention_demo.py" in summary
