@@ -100,30 +100,19 @@ export function useWebSocket() {
         chatStore.setProcessing(false)
         chatStore.setCompleted(event.data.summary)
 
-        // 处理所有返回的消息
+        // 处理 Agent 返回的所有消息
         if (event.data.messages && event.data.messages.length > 0) {
           for (const msg of event.data.messages) {
+            // 只添加助手消息，工具消息已经在 tool_start 中添加了
             if (msg.role === 'assistant') {
-              // 查找现有的助手消息（没有 toolCallId 的）
-              const existingAssistant = chatStore.messages.find(
-                m => m.role === 'assistant' && !m.toolCallId
-              )
-              if (existingAssistant) {
-                // 更新现有助手消息
-                chatStore.updateMessage(existingAssistant.id, {
-                  content: msg.content
-                })
-              } else {
-                // 添加新的助手消息
-                chatStore.addMessage({
-                  id: generateId(),
-                  role: 'assistant',
-                  content: msg.content,
-                  timestamp: Date.now()
-                })
-              }
+              chatStore.addMessage({
+                id: generateId(),
+                role: 'assistant',
+                content: msg.content,
+                timestamp: Date.now()
+              })
             }
-            // 工具消息和思考消息已经在 tool_start/thought 事件中处理了
+            // 工具消息（tool role）已经在 tool_start 事件中添加了占位
           }
         }
 

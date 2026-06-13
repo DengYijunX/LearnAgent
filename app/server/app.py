@@ -227,6 +227,7 @@ def create_app() -> FastAPI:
                     # 获取会话历史消息（用于维护上下文）
                     session = await session_mgr.get_session(session_id)
                     history_messages = session.messages if session else []
+                    history_count = len(history_messages)  # 记录历史消息数量
 
                     # 构建发送给 Agent 的消息列表（包含历史上下文）
                     messages = history_messages.copy()
@@ -242,22 +243,25 @@ def create_app() -> FastAPI:
                             permission_mode=session.permission_mode if session else "default",
                         )
 
-                        # 将 Agent 的回复添加到会话历史
-                        for msg in result.get("messages", []):
-                            if msg.get("role") == "assistant":
+                        # 只返回新消息（不包括历史消息）
+                        new_messages = result.get("messages", [])[history_count:]
+
+                        # 将新消息添加到会话历史
+                        for msg in new_messages:
+                            if msg.get("role") in ["user", "assistant"]:
                                 await session_mgr.add_message(
                                     session_id,
-                                    "assistant",
+                                    msg.get("role"),
                                     msg.get("content", "")
                                 )
 
                         await websocket.send_json({
                             "type": "completed",
                             "data": {
-                                "messages": result.get("messages", []),
+                                "messages": new_messages,  # 只返回新消息
                                 "reason": result.get("reason", "completed"),
                                 "summary": {
-                                    "turns": len([m for m in result.get("messages", []) if m.get("role") == "assistant"]),
+                                    "turns": len([m for m in new_messages if m.get("role") == "assistant"]),
                                     "tools": {},
                                 },
                             },
