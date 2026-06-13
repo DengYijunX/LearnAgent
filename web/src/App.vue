@@ -9,9 +9,6 @@ const chatPanelRef = ref<InstanceType<typeof ChatPanel> | null>(null)
 
 onMounted(async () => {
   await sessionStore.loadSessions()
-  if (sessionStore.sessions.length === 0) {
-    await handleCreateSession()
-  }
 })
 
 function handleSelectSession(id: string) {
@@ -19,7 +16,6 @@ function handleSelectSession(id: string) {
 }
 
 async function handleCreateSession() {
-  await sessionStore.createSession()
   chatPanelRef.value?.createSession()
 }
 </script>
