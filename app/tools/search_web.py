@@ -1,5 +1,7 @@
 """SearchWeb 工具 —— 搜索技术资料。"""
 
+import os
+
 from app.tools.base import Tool
 
 
@@ -53,9 +55,13 @@ class RealSearchWeb(Tool):
         try:
             from ddgs import DDGS
 
+            # 有代理时用全部引擎，无代理时只用可达的引擎
+            proxy = os.environ.get("HTTPS_PROXY") or os.environ.get("HTTP_PROXY") or os.environ.get("ALL_PROXY") or ""
+            backend = "auto" if proxy else "mojeek,yandex"
+
             results = []
-            with DDGS() as ddgs:
-                for r in ddgs.text(query, max_results=self._max_results):
+            with DDGS(proxy=proxy or None) as ddgs:
+                for r in ddgs.text(query, max_results=self._max_results, backend=backend):
                     results.append({
                         "title": r.get("title", ""),
                         "url": r.get("href", ""),

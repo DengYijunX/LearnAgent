@@ -58,7 +58,7 @@ async def build_engine(use_real: bool = False, resume_id: str | None = None):
     tools = ToolRegistry()
     if use_real:
         tools.register(RealSearchWeb(max_results=5))
-        tools.register(RealReadUrl(timeout=15))
+        tools.register(RealReadUrl(timeout=30))
         tools.register(RealGitHubAnalyzer(timeout=20))
     else:
         tools.register(MockSearchWeb())
@@ -239,11 +239,16 @@ def _show_summary(messages: list[dict], session_id: str, elapsed: float):
     sys.stdout.flush()
 
 
-def _find_last_text(messages: list[dict]) -> str | None:
-    """取最后一条 assistant 且有 content 的消息。"""
-    for m in reversed(messages):
+def _collect_text(messages: list[dict]) -> str | None:
+    """收集所有 assistant 且有 content 的消息，合并输出。"""
+    parts = []
+    for m in messages:
         if m.get("role") == "assistant" and m.get("content"):
-            return m["content"]
+            content = m["content"].strip()
+            if content:
+                parts.append(content)
+    if parts:
+        return "\n\n---\n\n".join(parts)
     return None
 
 
@@ -367,8 +372,8 @@ async def main():
             ws_dir = _get_workspace_dir(get_config().storage_base_dir, engine.current_topic)
             _register_workspace_tools(engine.tools, ws_dir)
 
-        # 取最后一条文本回复
-        content = _find_last_text(result.get("messages", []))
+        # 收集所有 assistant 文本回复
+        content = _collect_text(result.get("messages", []))
         if content:
             print(f"\n{content}\n")
 

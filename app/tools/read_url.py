@@ -1,5 +1,6 @@
 """ReadUrl 工具 —— 读取网页内容。"""
 
+import os
 import re
 
 from app.tools.base import Tool
@@ -58,7 +59,13 @@ class RealReadUrl(Tool):
         try:
             import httpx
 
-            async with httpx.AsyncClient(timeout=self._timeout, follow_redirects=True) as client:
+            # 从环境变量读取代理
+            proxy = os.environ.get("HTTPS_PROXY") or os.environ.get("HTTP_PROXY") or os.environ.get("ALL_PROXY") or ""
+            client_kwargs = {"timeout": self._timeout, "follow_redirects": True}
+            if proxy:
+                client_kwargs["proxies"] = proxy
+
+            async with httpx.AsyncClient(**client_kwargs) as client:
                 response = await client.get(url, headers={
                     "User-Agent": "Mozilla/5.0 (compatible; LearnAgent/0.2; +https://github.com/DengYijunX/LearnAgent)",
                     "Accept": "text/html,application/xhtml+xml",
