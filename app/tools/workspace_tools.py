@@ -12,6 +12,9 @@ from app.tools.base import Tool
 
 def _safe_path(workspace_root: str, user_path: str) -> str | None:
     """将用户输入路径解析为 workspace 内的绝对路径。拒绝逃逸。"""
+    # 拒绝空路径
+    if not user_path or not user_path.strip():
+        return None
     # 拒绝绝对路径
     if os.path.isabs(user_path):
         return None
@@ -26,11 +29,11 @@ def _safe_path(workspace_root: str, user_path: str) -> str | None:
 
 class FileWrite(Tool):
     name = "file_write"
-    description = "在项目工作区创建或覆写文件。输入 path（相对路径）和 content（文件内容）。"
+    description = "在项目工作区创建或覆写文件。输入 path（相对项目根目录的路径）和 content（文件内容）。路径示例：storage/workspace/hello.py、storage/workspace/utils/helper.py。"
     input_schema = {
         "type": "object",
         "properties": {
-            "path": {"type": "string", "description": "文件在 workspace 内的相对路径，如 src/main.py"},
+            "path": {"type": "string", "description": "文件相对项目根目录的路径，如 storage/workspace/hello.py、storage/workspace/scripts/deploy.sh"},
             "content": {"type": "string", "description": "要写入的文件内容"},
         },
         "required": ["path", "content"],
@@ -65,11 +68,11 @@ class FileWrite(Tool):
 
 class FileRead(Tool):
     name = "file_read"
-    description = "读取 workspace 内的文件内容。输入 path（相对路径）。"
+    description = "读取项目文件内容。输入 path（相对项目根目录的路径），如 storage/workspace/hello.py。"
     input_schema = {
         "type": "object",
         "properties": {
-            "path": {"type": "string", "description": "文件在 workspace 内的相对路径"},
+            "path": {"type": "string", "description": "文件相对项目根目录的路径，如 storage/workspace/hello.py"},
         },
         "required": ["path"],
     }

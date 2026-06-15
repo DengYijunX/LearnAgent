@@ -181,7 +181,7 @@ def _summarize_result(tool_name: str, result: dict) -> tuple[str, dict]:
     if result.get("isError"):
         err = (result.get("error") or result.get("stderr") or "未知错误")
         # 去掉换行，截断
-        err = str(err).replace("\n", " ")[:80]
+        err = str(err).replace("\n", " ")[:250]
         return err, extra
     if tool_name == "search_web":
         n = len(result.get("results", []))

@@ -55,21 +55,30 @@ class RealSearchWeb(Tool):
         try:
             from ddgs import DDGS
 
-            # 有代理时用全部引擎，无代理时只用可达的引擎
             proxy = os.environ.get("HTTPS_PROXY") or os.environ.get("HTTP_PROXY") or os.environ.get("ALL_PROXY") or ""
-            backend = "auto" if proxy else "mojeek,yandex"
 
-            results = []
-            with DDGS(proxy=proxy or None) as ddgs:
-                for r in ddgs.text(query, max_results=self._max_results, backend=backend):
-                    results.append({
-                        "title": r.get("title", ""),
-                        "url": r.get("href", ""),
-                        "snippet": r.get("body", ""),
-                    })
-            return {
-                "results": results,
-                "isError": False,
-            }
+            # 先尝试 auto（DuckDuckGo，质量最好），失败再降级到 mojeek,yandex
+            backends = ["auto", "mojeek,yandex"]
+            last_error = None
+
+            for backend in backends:
+                try:
+                    results = []
+                    with DDGS(proxy=proxy or None, timeout=8) as ddgs:
+                        for r in ddgs.text(query, max_results=self._max_results, backend=backend):
+                            results.append({
+                                "title": r.get("title", ""),
+                                "url": r.get("href", ""),
+                                "snippet": r.get("body", ""),
+                            })
+                    if results:
+                        return {"results": results, "isError": False}
+                except Exception as e:
+                    last_error = str(e)
+                    continue  # 当前后端失败，试下一个
+
+            # 所有后端都失败
+            return {"isError": True, "error": f"搜索失败：{last_error}"}
+
         except Exception as e:
             return {"isError": True, "error": f"搜索失败：{e}"}

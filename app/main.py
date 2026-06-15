@@ -17,6 +17,9 @@ try:
 except ImportError:
     msvcrt = None
 
+from prompt_toolkit import PromptSession
+from prompt_toolkit.history import FileHistory
+
 from app.config.settings import get_config
 from app.llm.mock_client import MockLLMClient
 from app.llm.model_selector import ModelSelector
@@ -34,14 +37,15 @@ from app.mcp.loader import load_mcp_tools
 
 
 def _get_workspace_dir(storage_base: str, topic: str | None) -> str:
-    name = topic or "_default"
-    return os.path.join(storage_base, "workspace", name)
+    # 返回项目根目录（storage 的父级），LLM 使用 storage/workspace/xxx 等相对路径
+    return os.path.dirname(os.path.abspath(storage_base))
 
 
 def _register_workspace_tools(tools: ToolRegistry, workspace_dir: str):
     for name in ("file_write", "file_read", "run_code", "list_files"):
         if tools.find(name):
             del tools._tools[name]
+    workspace_dir = os.path.abspath(workspace_dir)
     os.makedirs(workspace_dir, exist_ok=True)
     tools.register(FileWrite(workspace_root=workspace_dir))
     tools.register(FileRead(workspace_root=workspace_dir))
@@ -119,14 +123,8 @@ def _resume_session(engine, session_store, storage_base, resume_id: str):
         print(f"  上一次主题：{engine.current_topic}")
 
 
-_trust_window = {"active": False, "expires_at": 0.0}
-
 async def ask_permission(tool_name: str, reason: str, tool_input: dict | None = None) -> bool:
-    global _trust_window
-    now = time.time()
-    if _trust_window["active"] and now < _trust_window["expires_at"]:
-        if tool_name in ("file_write", "run_code"):
-            return True
+    """每次写操作都需要用户确认，不设免确认窗口。"""
     name_cn = {"file_write": "写入文件", "run_code": "执行代码", "learning_todo_write": "保存学习任务"}.get(tool_name, tool_name)
     print(f"\n  ⚠ {name_cn}")
     if tool_input:
@@ -136,12 +134,8 @@ async def ask_permission(tool_name: str, reason: str, tool_input: dict | None = 
                 v_str = v_str[:100] + "..."
             print(f"     {k}: {v_str}")
     try:
-        answer = input("     允许？(y/n，同类操作60s免确认): ").strip().lower()
-        if answer in ("y", "yes", ""):
-            _trust_window["active"] = True
-            _trust_window["expires_at"] = time.time() + 60
-            return True
-        return False
+        answer = input("     允许？(y/n): ").strip().lower()
+        return answer in ("y", "yes", "")
     except (EOFError, KeyboardInterrupt):
         return False
 
@@ -178,7 +172,7 @@ async def on_event(event_type: str, data: dict):
     elif event_type == "topic_change":
         msg = data.get("message", "")
         new_topic = data.get("new_topic", "")
-        storage = os.path.join(get_config().storage_base_dir, "workspace", new_topic or "_default")
+        storage = os.path.dirname(os.path.abspath(get_config().storage_base_dir))
         sys.stdout.write(f"\n  📁 {msg}\n  📂 workspace: {storage}\n")
         sys.stdout.flush()
 
@@ -271,6 +265,10 @@ def _maybe_merge_pasted_lines(first_line: str) -> str:
     return first_line
 
 
+# 使用 prompt_toolkit 独立历史，y/n 权限确认不会混入，且跨会话持久化
+_main_session = PromptSession(history=FileHistory(os.path.expanduser("~/.learnagent_history")))
+
+
 async def main():
     use_real = "--real" in sys.argv
     resume_id = None
@@ -296,7 +294,7 @@ async def main():
 
     while True:
         try:
-            user_input = input("> ").strip()
+            user_input = (await _main_session.prompt_async("> ")).strip()
         except KeyboardInterrupt:
             now = time.time()
             if _ctrl_c_time > 0 and now - _ctrl_c_time < 2:
