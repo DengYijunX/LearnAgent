@@ -372,10 +372,16 @@ async def main():
             ws_dir = _get_workspace_dir(get_config().storage_base_dir, engine.current_topic)
             _register_workspace_tools(engine.tools, ws_dir)
 
-        # 收集所有 assistant 文本回复
-        content = _collect_text(result.get("messages", []))
+        # 收集本轮新产生的 assistant 文本回复
+        messages = result.get("messages", [])
+        start = result.get("_msg_start", 0)
+        content = _collect_text(messages[start:])
         if content:
-            print(f"\n{content}\n")
+            try:
+                print(f"\n{content}\n")
+            except UnicodeEncodeError:
+                # Windows GBK 终端无法输出 emoji，用 buffer 绕过编码层
+                sys.stdout.buffer.write(f"\n{content}\n\n".encode("utf-8"))
 
         # 收尾栏
         elapsed = time.time() - t_round

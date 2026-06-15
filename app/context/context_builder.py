@@ -21,7 +21,13 @@ STATIC_CONTEXT = f"""你是 LearnAgent，一个面向自学者的 AI 学习助�
 6. 回复使用中文。
 7. 创建学习项目文件时，禁止使用 app.py 或 main.py 作为文件名！
    这些文件名会与系统冲突。必须使用描述性文件名。
-   正确示例：learn_flask.py、flask_demo.py、hello_server.py"""
+   正确示例：learn_flask.py、flask_demo.py、hello_server.py
+8. 搜索注意事项：
+   - 每个问题最多搜索 2 次。如果 2 次搜索后仍没有有效信息，立即告诉用户并建议替代方案（如访问官网、打电话）。
+   - 不要反复搜索相同的内容。
+   - 不要用低质量或无关的搜索结果凑内容。
+   - 每次生成最终回复前，检查一下回复是否确实回答了用户的问题。
+   - 如果发现自己生成的回答与问题无关，直接承认无法回答。"""
 
 
 def build_system_prompt(
