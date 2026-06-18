@@ -162,6 +162,37 @@ def create_app() -> FastAPI:
         perm_queue: asyncio.Queue = asyncio.Queue()
         agent_task: asyncio.Task | None = None
 
+        # 提取/缓存 session 级别 topic 的工具集
+        _cached_topic: str | None = None
+        _cached_tools: ToolRegistry | None = None
+
+        def _get_tools_for_topic(topic: str | None) -> ToolRegistry:
+            """按主题创建 workspace 子目录，返回对应工具集。
+            无 topic 时用 _default。"""
+            nonlocal _cached_topic, _cached_tools
+            effective = topic or "_default"
+            if _cached_topic == effective and _cached_tools is not None:
+                return _cached_tools
+
+            base = os.path.abspath(
+                os.path.join(os.path.dirname(__file__), "../../storage/workspace")
+            )
+            topic_root = os.path.join(base, effective)
+            os.makedirs(topic_root, exist_ok=True)
+
+            reg = ToolRegistry()
+            reg.register(RealSearchWeb(max_results=5))
+            reg.register(RealReadUrl(timeout=15))
+            reg.register(FileWrite(topic_root))
+            reg.register(FileRead(topic_root))
+            reg.register(RunCode(topic_root))
+            reg.register(ListFiles(topic_root))
+            reg.register(LearningTodoWrite())
+            _cached_topic = effective
+            _cached_tools = reg
+            logger.info("[ws] topic workspace: %s → %s", effective, topic_root)
+            return reg
+
         async def run_agent(content: str):
             nonlocal session
 
@@ -196,13 +227,12 @@ def create_app() -> FastAPI:
                         "tool_input": tool_input,
                     }
                 })
-                # 从 Queue 等待响应，不阻塞 while 循环
                 while True:
                     try:
                         resp = await asyncio.wait_for(perm_queue.get(), timeout=120.0)
                         if resp.get("request_id") == request_id:
                             return resp.get("approved", False)
-                        await perm_queue.put(resp)  # 不是当前请求，放回
+                        await perm_queue.put(resp)
                     except asyncio.TimeoutError:
                         logger.warning("permission timeout  request=%s  tool=%s",
                                        request_id[:12], tool_name)
@@ -224,7 +254,7 @@ def create_app() -> FastAPI:
                 result = await agent_loop(
                     messages=messages,
                     llm=_llm_client,
-                    tools=_tool_registry,
+                    tools=_get_tools_for_topic(session.topic if session else None),
                     system=system_prompt,
                     max_turns=8,
                     ask_callback=ask_permission,

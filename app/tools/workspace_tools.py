@@ -50,16 +50,10 @@ class FileWrite(Tool):
     async def call(self, tool_input: dict, context: dict | None = None) -> dict:
         path = tool_input.get("path", "")
         content = tool_input.get("content", "")
+        # 自动去除 storage/workspace/ 前缀（LLM 可能被描述误导）
         normalized_input = path.replace("\\", "/").lstrip("./")
         if normalized_input.startswith("storage/workspace/"):
-            basename_hint = os.path.basename(normalized_input)
-            return {
-                "isError": True,
-                "error": (
-                    "请只提供 workspace 内相对路径，不要包含 storage/workspace 前缀。"
-                    f"例如：{basename_hint or 'example.py'}"
-                ),
-            }
+            path = normalized_input[len("storage/workspace/"):]
         # 拒绝保留文件名
         basename = os.path.basename(path)
         if basename.lower() in self.RESERVED_NAMES:
@@ -93,6 +87,10 @@ class FileRead(Tool):
 
     async def call(self, tool_input: dict, context: dict | None = None) -> dict:
         path = tool_input.get("path", "")
+        # 自动去除 storage/workspace/ 前缀
+        normalized_input = path.replace("\\", "/").lstrip("./")
+        if normalized_input.startswith("storage/workspace/"):
+            path = normalized_input[len("storage/workspace/"):]
         safe = _safe_path(self._root, path)
         if safe is None:
             return {"isError": True, "error": f"路径非法：{path}"}
@@ -119,7 +117,7 @@ class RunCode(Tool):
         "required": ["command"],
     }
 
-    def __init__(self, workspace_root: str, timeout: int = 10, max_output: int = 5000, use_docker: bool = False):
+    def __init__(self, workspace_root: str, timeout: int = 60, max_output: int = 5000, use_docker: bool = False):
         self._root = workspace_root
         self._timeout = timeout
         self._max_output = max_output

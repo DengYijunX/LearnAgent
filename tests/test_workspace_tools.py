@@ -43,18 +43,20 @@ class TestFileWrite:
         assert result.get("isError") is True
 
     @pytest.mark.asyncio
-    async def test_rejects_storage_workspace_prefixed_path_with_guidance(self, workspace):
+    async def test_auto_strips_storage_workspace_prefix(self, workspace):
         from app.tools.workspace_tools import FileWrite
 
         tool = FileWrite(workspace_root=workspace)
         result = await tool.call({
             "path": "storage/workspace/transformer/self_attention_demo.py",
-            "content": "print('bad target')",
+            "content": "print('ok')",
         })
 
-        assert result.get("isError") is True
-        assert "workspace 内相对路径" in result["error"]
-        assert "self_attention_demo.py" in result["error"]
+        assert result.get("isError") is False
+        # 文件应被创建在正确路径（去掉了 storage/workspace/ 前缀）
+        import os
+        expected = os.path.join(workspace, "transformer", "self_attention_demo.py")
+        assert os.path.isfile(expected)
 
     def test_is_not_read_only(self):
         from app.tools.workspace_tools import FileWrite
