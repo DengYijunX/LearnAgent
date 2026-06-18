@@ -1,9 +1,13 @@
 import json
+import logging
 import time
 
 from app.llm.base import LLMClient
 from app.tools.registry import ToolRegistry
 from app.safety.permission import check_permission, PermissionDecision
+from app.logging import log_call
+
+logger = logging.getLogger(__name__)
 
 
 def extract_tool_calls(assistant_message: dict) -> list[dict]:
@@ -39,6 +43,7 @@ def format_error_result(tool_call_id: str, error: str) -> dict:
     }
 
 
+@log_call(label="agent_loop")
 async def agent_loop(
     messages: list[dict],
     llm: LLMClient,

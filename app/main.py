@@ -8,9 +8,15 @@
 
 import asyncio
 import glob
+import logging
 import os
 import sys
 import time
+
+from app.logging import setup_logging
+
+setup_logging()
+logger = logging.getLogger(__name__)
 
 try:
     import msvcrt  # Windows only

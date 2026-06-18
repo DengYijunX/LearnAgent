@@ -1,6 +1,7 @@
 import json
 import logging
 from app.llm.base import LLMClient
+from app.logging import log_call
 
 logger = logging.getLogger(__name__)
 
@@ -61,6 +62,7 @@ class DeepSeekLLMClient(LLMClient):
         self._temperature = temperature
         self._max_tokens = max_tokens
 
+    @log_call(label="deepseek.chat")
     async def chat(
         self,
         messages: list[dict],

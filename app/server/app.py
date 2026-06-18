@@ -9,8 +9,9 @@ from fastapi import FastAPI, WebSocket
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 
-# 配置日志
-logging.basicConfig(level=logging.INFO)
+from app.logging import setup_logging
+
+setup_logging()
 logger = logging.getLogger(__name__)
 
 # 加载 .env 文件
@@ -27,6 +28,7 @@ from .session_manager import SessionManager
 from .routes import router as api_router
 
 # 导入 Agent 核心模块
+from app.context.context_builder import build_system_prompt
 from app.llm.deepseek_client import DeepSeekLLMClient
 from app.tools.registry import ToolRegistry
 from app.tools.search_web import MockSearchWeb
@@ -232,11 +234,24 @@ def create_app() -> FastAPI:
                     # 构建发送给 Agent 的消息列表（包含历史上下文）
                     messages = history_messages.copy()
 
+                    # 构建 system prompt（CLI 和 Web 共用同一套）
+                    system_prompt = build_system_prompt(
+                        current_topic=session.topic if session else None,
+                    )
+                    logger.info(
+                        "[ws] session=%s topic=%s history=%d msgs prompt_len=%d",
+                        session_id,
+                        session.topic if session else None,
+                        history_count,
+                        len(system_prompt),
+                    )
+
                     try:
                         result = await agent_loop(
                             messages=messages,
                             llm=_llm_client,
                             tools=_tool_registry,
+                            system=system_prompt,
                             max_turns=8,
                             ask_callback=ask_permission,
                             on_event=on_event,
