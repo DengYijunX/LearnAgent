@@ -11,6 +11,7 @@ from datetime import datetime
 class Session:
     session_id: str
     topic: Optional[str] = None
+    intent: str = "chat"
     created_at: datetime = None
     updated_at: datetime = None
     permission_mode: str = "default"
@@ -49,6 +50,7 @@ class SessionManager:
         session_id: str,
         *,
         topic: Optional[str] = None,
+        intent: Optional[str] = None,
         permission_mode: Optional[str] = None,
         first_message: Optional[str] = None,
         increment_count: bool = False,
@@ -59,6 +61,8 @@ class SessionManager:
                 return None
             if topic is not None:
                 session.topic = topic
+            if intent is not None:
+                session.intent = intent
             if permission_mode is not None:
                 session.permission_mode = permission_mode
             if first_message is not None:

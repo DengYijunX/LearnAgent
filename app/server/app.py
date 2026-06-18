@@ -258,27 +258,55 @@ def create_app() -> FastAPI:
             history_count = len(history_messages)
             messages = history_messages.copy()
 
-            # ── LLM 路由：识别意图和主题（与 CLI 一致） ──
-            intent = "chat"
-            detected_topic: str | None = None
+            # ── LLM 路由（session 级别持久化） ──
+            # 原则：
+            #   - intent 只在明确定向时变，"继续"/"然后呢"不降级
+            #   - topic 用 distance 检测漂移/切换
+            #   - max_turns 从 intent 派生
+            session_intent = (session.intent if session else None) or "chat"
+            session_topic = session.topic if session else None
+            route_intent = "chat"
+            route_topic: str | None = None
+
             if _llm_client is not None:
                 try:
                     router = LLMRouter(_llm_client)
                     route = await router.route(content)
-                    intent = route["intent"]
-                    detected_topic = route.get("topic")
-                    logger.info("[ws] route  intent=%s  topic=%s", intent, detected_topic)
+                    route_intent = route["intent"]
+                    route_topic = route.get("topic")
                 except Exception:
-                    logger.debug("LLM 路由失败，回退到 chat", exc_info=True)
+                    logger.debug("LLM 路由失败", exc_info=True)
 
-            # 更新 session topic
-            effective_topic = detected_topic or (session.topic if session else None)
-            if effective_topic and session:
-                await session_mgr.update_session(session_id, topic=effective_topic)
+            # intent：非 chat 才更新（"继续"不会把 learn 改成 chat）
+            if route_intent != "chat":
+                session_intent = route_intent
+
+            # topic：非空才更新
+            if route_topic:
+                from app.core.router import topic_distance
+                if session_topic:
+                    dist = topic_distance(session_topic, route_topic)
+                    if dist == "switch":
+                        logger.info("[ws] topic switch  %s → %s", session_topic, route_topic)
+                session_topic = route_topic
+
+            # max_turns 从 intent 派生
+            _INTENT_TURNS = {"learn_concept": 8, "analyze_repo": 12, "review": 6, "chat": 6}
+            max_turns = _INTENT_TURNS.get(session_intent, 8)
+
+            logger.info("[ws] route  intent=%s→%s  topic=%s→%s  turns=%d",
+                       route_intent, session_intent,
+                       route_topic, session_topic, max_turns)
+
+            # 同步到 session
+            if session:
+                await session_mgr.update_session(
+                    session_id, intent=session_intent, topic=session_topic
+                )
 
             # ── Skill 注入（与 CLI 一致） ──
             skill_body: str | None = None
-            skill_name = INTENT_TO_SKILL.get(intent)
+            skill_name = INTENT_TO_SKILL.get(session_intent)
             if skill_name:
                 skills_dir = os.path.join(os.path.dirname(__file__), "../../skills")
                 try:
@@ -286,7 +314,7 @@ def create_app() -> FastAPI:
                     skill = load_skill(skills_dir, skill_name)
                     if skill:
                         skill_body = skill.get("body")
-                        logger.info("[ws] skill loaded  intent=%s  skill=%s", intent, skill_name)
+                        logger.info("[ws] skill loaded  intent=%s  skill=%s", session_intent, skill_name)
                 except Exception:
                     pass
 
@@ -300,17 +328,17 @@ def create_app() -> FastAPI:
                                removed, tokens, estimate_tokens(messages))
 
             system_prompt = build_system_prompt(
-                current_topic=effective_topic,
-                intent=intent,
+                current_topic=session_topic,
+                intent=session_intent,
                 skill_body=skill_body,
                 plan_mode=(session.permission_mode == "plan" if session else False),
             )
 
             # 注入工作区已有文件清单（让 LLM 知道哪些文件已存在，避免意外覆盖）
-            tools_for_run = _get_tools_for_topic(effective_topic)
+            tools_for_run = _get_tools_for_topic(session_topic)
             workspace_dir = os.path.realpath(
                 os.path.join(os.path.dirname(__file__), "../../storage/workspace",
-                             effective_topic or "_default")
+                             session_topic or "_default")
             )
             try:
                 existing = os.listdir(workspace_dir)
@@ -318,7 +346,7 @@ def create_app() -> FastAPI:
                     file_list = "\n".join(f"  - {f}" for f in sorted(existing)[:30])
                     note = (
                         f"\n\n<WORKSPACE_FILES>\n"
-                        f"当前工作区「{effective_topic or '默认'}」已有文件 "
+                        f"当前工作区「{session_topic or '默认'}」已有文件 "
                         f"（{len(existing)} 个）：\n{file_list}\n"
                         f"创建新文件时注意不要覆盖不想改的文件。"
                         f"如需修改已有文件，先用 file_read 读取，再 file_write 写回。\n"
@@ -330,7 +358,7 @@ def create_app() -> FastAPI:
                 pass
 
             logger.info("[ws] session=%s intent=%s topic=%s skill=%s history=%d prompt_len=%d",
-                       session_id, intent, effective_topic,
+                       session_id, session_intent, session_topic,
                        skill_name or "none", history_count, len(system_prompt))
 
             try:
@@ -339,7 +367,7 @@ def create_app() -> FastAPI:
                     llm=_llm_client,
                     tools=tools_for_run,
                     system=system_prompt,
-                    max_turns=8,
+                    max_turns=max_turns,
                     ask_callback=ask_permission,
                     on_event=on_event,
                     permission_mode=session.permission_mode if session else "default",
@@ -353,20 +381,20 @@ def create_app() -> FastAPI:
                         )
 
                 # ── 长期记忆（与 CLI 一致） ──
-                if _memory_store and intent in ("learn_concept", "analyze_repo", "review"):
-                    if effective_topic:
+                if _memory_store and session_intent in ("learn_concept", "analyze_repo", "review"):
+                    if session_topic:
                         last_content = ""
                         for m_text in reversed(result.get("messages", [])):
                             if m_text.get("role") == "assistant" and m_text.get("content"):
                                 last_content = str(m_text["content"])[:500]
                                 break
                         _memory_store.save(
-                            name=f"topic_{effective_topic}",
+                            name=f"topic_{session_topic}",
                             memory_type="learning",
-                            description=f"学习记录：{effective_topic}",
-                            body=f"- 主题：{effective_topic}\n- 意图：{intent}\n- 最近摘要：{last_content}\n",
+                            description=f"学习记录：{session_topic}",
+                            body=f"- 主题：{session_topic}\n- 意图：{session_intent}\n- 最近摘要：{last_content}\n",
                         )
-                        logger.info("[ws] memory saved  topic=%s", effective_topic)
+                        logger.info("[ws] memory saved  topic=%s", session_topic)
 
                 await websocket.send_json({
                     "type": "completed",

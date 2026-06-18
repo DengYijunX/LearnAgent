@@ -102,8 +102,9 @@ async def get_session(session_id: str):
         raise HTTPException(status_code=404, detail="Session not found")
     return {
         **_format_session(session),
+        "intent": session.intent,
         "permission_mode": session.permission_mode,
-        "messages": session.messages,  # Return stored messages
+        "messages": session.messages,
     }
 
 
