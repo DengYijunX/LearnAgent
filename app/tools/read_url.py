@@ -1,12 +1,15 @@
 """ReadUrl 工具 —— 读取网页内容。"""
 
 import ipaddress
+import logging
 import os
 import re
 import socket
 from urllib.parse import urljoin, urlparse
 
 from app.tools.base import Tool
+
+logger = logging.getLogger(__name__)
 
 # 禁止访问的地址段（防 SSRF）
 _BLOCKED_CIDRS = [
@@ -24,34 +27,41 @@ _BLOCKED_CIDRS = [
 
 
 def _is_safe_url(url: str) -> tuple[bool, str]:
-    """验证 URL 不会访问内网/本地地址。返回 (安全?, 原因)。"""
+    """验证 URL 不会访问内网/本地地址。返回 (安全?, 用户友好消息)，
+    内部详情通过 logger 记录。"""
     try:
         parsed = urlparse(url)
         hostname = parsed.hostname
         if not hostname:
-            return False, "无法解析主机名"
+            return False, "无效的主机名"
 
-        addr = ipaddress.ip_address(hostname)
-        for cidr in _BLOCKED_CIDRS:
-            if addr in cidr:
-                return False, f"禁止访问内网地址: {hostname}"
-        return True, ""
-    except ValueError:
-        # 不是 IP 地址，需要 DNS 解析
+        # 先检查是否为 IP 字面量
         try:
-            resolved = socket.getaddrinfo(hostname, None)
-            for _, _, _, _, sockaddr in resolved:
-                ip = sockaddr[0]
-                addr = ipaddress.ip_address(ip)
-                for cidr in _BLOCKED_CIDRS:
-                    if addr in cidr:
-                        return False, f"禁止访问内网地址: {hostname} → {ip}"
-        except socket.gaierror:
-            return False, f"无法解析域名: {hostname}"
-        except Exception:
-            pass
+            addr = ipaddress.ip_address(hostname)
+            for cidr in _BLOCKED_CIDRS:
+                if addr in cidr:
+                    logger.warning("SSRF blocked: %s → %s", url, hostname)
+                    return False, "不允许访问内网地址"
+            return True, ""
+        except ValueError:
+            pass  # 不是 IP，继续 DNS 检查
+
+        # DNS 解析后再次检查
+        resolved = socket.getaddrinfo(hostname, None)
+        for _, _, _, _, sockaddr in resolved:
+            ip = sockaddr[0]
+            addr = ipaddress.ip_address(ip)
+            for cidr in _BLOCKED_CIDRS:
+                if addr in cidr:
+                    logger.warning("SSRF blocked: %s → %s → %s", url, hostname, ip)
+                    return False, "不允许访问内网地址"
         return True, ""
-    except Exception:
+
+    except socket.gaierror:
+        logger.info("DNS 解析失败: %s → %s", url, hostname)
+        return False, "无法解析该域名"
+    except Exception as exc:
+        logger.error("URL 安全检查异常: %s → %s: %s", url, hostname, exc)
         return False, "URL 格式无效"
 
 
