@@ -131,12 +131,17 @@ def _build_ctx(fn, args, kwargs) -> dict:
 
 
 def _summarize_val(v, max_len: int = 80) -> str:
-    """智能摘要：list/dict 显示长度，str 截断。"""
+    """智能摘要：list/dict 显示关键信息，str 截断。"""
     if isinstance(v, (list, tuple)):
         if v and isinstance(v[0], dict):
             return f"[{len(v)} dicts]"
         return f"[{len(v)} items]"
     if isinstance(v, dict):
+        # dict 优先显示关键字段
+        for key in ("path", "query", "url", "name", "error"):
+            if key in v:
+                val = str(v[key])[:max_len - len(key) - 10]
+                return f"{key}={val}"
         return f"{{{len(v)} keys}}"
     if hasattr(v, "to_api_schema"):
         try:

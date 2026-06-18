@@ -100,19 +100,31 @@ export function useWebSocket() {
         chatStore.setProcessing(false)
         chatStore.setCompleted(event.data.summary)
 
-        // 处理 Agent 返回的所有消息
+        // 检查 thought 事件是否已经创建了最后一个 assistant 消息占位
+        // 如果有内容且最后一条消息已经是 assistant（由 thought 事件创建），
+        // 则更新它而不是新建，避免重复显示同一句话
         if (event.data.messages && event.data.messages.length > 0) {
-          for (const msg of event.data.messages) {
-            // 只添加助手消息，工具消息已经在 tool_start 中添加了
-            if (msg.role === 'assistant') {
+          const lastAssistantFromLoop = [...event.data.messages]
+            .reverse()
+            .find((m: any) => m.role === 'assistant' && m.content)
+
+          if (lastAssistantFromLoop) {
+            const existingPlaceholder = [...chatStore.messages]
+              .reverse()
+              .find((m: Message) => m.role === 'assistant' && !m.content)
+
+            if (existingPlaceholder) {
+              chatStore.updateMessage(existingPlaceholder.id, {
+                content: lastAssistantFromLoop.content
+              })
+            } else {
               chatStore.addMessage({
                 id: generateId(),
                 role: 'assistant',
-                content: msg.content,
+                content: lastAssistantFromLoop.content,
                 timestamp: Date.now()
               })
             }
-            // 工具消息（tool role）已经在 tool_start 事件中添加了占位
           }
         }
 

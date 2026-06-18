@@ -31,8 +31,8 @@ from .routes import router as api_router
 from app.context.context_builder import build_system_prompt
 from app.llm.deepseek_client import DeepSeekLLMClient
 from app.tools.registry import ToolRegistry
-from app.tools.search_web import MockSearchWeb
-from app.tools.read_url import MockReadUrl
+from app.tools.search_web import RealSearchWeb
+from app.tools.read_url import RealReadUrl
 from app.tools.workspace_tools import FileWrite, FileRead, RunCode, ListFiles
 from app.tools.todo_tools import LearningTodoWrite
 from app.core.agent_loop import agent_loop
@@ -77,11 +77,13 @@ def _create_llm_client() -> DeepSeekLLMClient:
 
 
 def _create_tool_registry() -> ToolRegistry:
-    workspace_root = os.path.join(os.path.dirname(__file__), "../../storage/workspace")
-    
+    workspace_root = os.path.abspath(
+        os.path.join(os.path.dirname(__file__), "../../storage/workspace")
+    )
+
     registry = ToolRegistry()
-    registry.register(MockSearchWeb())
-    registry.register(MockReadUrl())
+    registry.register(RealSearchWeb(max_results=5))
+    registry.register(RealReadUrl(timeout=15))
     registry.register(FileWrite(workspace_root))
     registry.register(FileRead(workspace_root))
     registry.register(RunCode(workspace_root))
