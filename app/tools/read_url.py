@@ -131,7 +131,7 @@ class RealReadUrl(Tool):
             proxy = os.environ.get("HTTPS_PROXY") or os.environ.get("HTTP_PROXY") or os.environ.get("ALL_PROXY") or ""
             client_kwargs = {"timeout": self._timeout, "follow_redirects": False}
             if proxy:
-                client_kwargs["proxies"] = proxy
+                client_kwargs["proxy"] = proxy
 
             async with httpx.AsyncClient(**client_kwargs) as client:
                 # 手动处理重定向，每次跳转都重新验证目标 URL
