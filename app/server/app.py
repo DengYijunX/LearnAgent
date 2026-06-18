@@ -36,12 +36,16 @@ from app.tools.read_url import RealReadUrl
 from app.tools.workspace_tools import FileWrite, FileRead, RunCode, ListFiles
 from app.tools.todo_tools import LearningTodoWrite
 from app.core.agent_loop import agent_loop
+from app.core.llm_router import LLMRouter
+from app.core.query_engine import INTENT_TO_SKILL
+from app.memory.memory_store import MemoryStore
 
 
 # 全局变量
 _session_manager: Optional[SessionManager] = None
 _llm_client: Optional[DeepSeekLLMClient] = None
 _tool_registry: Optional[ToolRegistry] = None
+_memory_store: Optional[MemoryStore] = None
 
 
 def get_session_manager() -> SessionManager:
@@ -94,10 +98,11 @@ def _create_tool_registry() -> ToolRegistry:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    global _session_manager, _llm_client, _tool_registry
+    global _session_manager, _llm_client, _tool_registry, _memory_store
 
     _session_manager = SessionManager()
-    logger.info("Session manager initialized")
+    _memory_store = MemoryStore(base_dir="storage/memory")
+    logger.info("Session manager + memory store initialized")
 
     try:
         _llm_client = _create_llm_client()
@@ -114,6 +119,7 @@ async def lifespan(app: FastAPI):
     _session_manager = None
     _llm_client = None
     _tool_registry = None
+    _memory_store = None
 
 
 def create_app() -> FastAPI:
@@ -252,7 +258,39 @@ def create_app() -> FastAPI:
             history_count = len(history_messages)
             messages = history_messages.copy()
 
-            # 上下文压缩（与 CLI 同步）
+            # ── LLM 路由：识别意图和主题（与 CLI 一致） ──
+            intent = "chat"
+            detected_topic: str | None = None
+            if _llm_client is not None:
+                try:
+                    router = LLMRouter(_llm_client)
+                    route = await router.route(content)
+                    intent = route["intent"]
+                    detected_topic = route.get("topic")
+                    logger.info("[ws] route  intent=%s  topic=%s", intent, detected_topic)
+                except Exception:
+                    logger.debug("LLM 路由失败，回退到 chat", exc_info=True)
+
+            # 更新 session topic
+            effective_topic = detected_topic or (session.topic if session else None)
+            if effective_topic and session:
+                await session_mgr.update_session(session_id, topic=effective_topic)
+
+            # ── Skill 注入（与 CLI 一致） ──
+            skill_body: str | None = None
+            skill_name = INTENT_TO_SKILL.get(intent)
+            if skill_name:
+                skills_dir = os.path.join(os.path.dirname(__file__), "../../skills")
+                try:
+                    from app.skills.loader import load_skill
+                    skill = load_skill(skills_dir, skill_name)
+                    if skill:
+                        skill_body = skill.get("body")
+                        logger.info("[ws] skill loaded  intent=%s  skill=%s", intent, skill_name)
+                except Exception:
+                    pass
+
+            # ── 上下文压缩（与 CLI 同步） ──
             from app.context.compaction import estimate_tokens, compact_messages, BUDGET_WARNING
             tokens = estimate_tokens(messages)
             if tokens > BUDGET_WARNING:
@@ -262,17 +300,20 @@ def create_app() -> FastAPI:
                                removed, tokens, estimate_tokens(messages))
 
             system_prompt = build_system_prompt(
-                current_topic=session.topic if session else None,
+                current_topic=effective_topic,
+                intent=intent,
+                skill_body=skill_body,
+                plan_mode=(session.permission_mode == "plan" if session else False),
             )
-            logger.info("[ws] session=%s topic=%s history=%d msgs prompt_len=%d",
-                       session_id, session.topic if session else None,
-                       history_count, len(system_prompt))
+            logger.info("[ws] session=%s intent=%s topic=%s skill=%s history=%d prompt_len=%d",
+                       session_id, intent, effective_topic,
+                       skill_name or "none", history_count, len(system_prompt))
 
             try:
                 result = await agent_loop(
                     messages=messages,
                     llm=_llm_client,
-                    tools=_get_tools_for_topic(session.topic if session else None),
+                    tools=_get_tools_for_topic(effective_topic),
                     system=system_prompt,
                     max_turns=8,
                     ask_callback=ask_permission,
@@ -286,6 +327,22 @@ def create_app() -> FastAPI:
                         await session_mgr.add_message(
                             session_id, msg.get("role"), msg.get("content", "")
                         )
+
+                # ── 长期记忆（与 CLI 一致） ──
+                if _memory_store and intent in ("learn_concept", "analyze_repo", "review"):
+                    if effective_topic:
+                        last_content = ""
+                        for m_text in reversed(result.get("messages", [])):
+                            if m_text.get("role") == "assistant" and m_text.get("content"):
+                                last_content = str(m_text["content"])[:500]
+                                break
+                        _memory_store.save(
+                            name=f"topic_{effective_topic}",
+                            memory_type="learning",
+                            description=f"学习记录：{effective_topic}",
+                            body=f"- 主题：{effective_topic}\n- 意图：{intent}\n- 最近摘要：{last_content}\n",
+                        )
+                        logger.info("[ws] memory saved  topic=%s", effective_topic)
 
                 await websocket.send_json({
                     "type": "completed",
