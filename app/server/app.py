@@ -291,7 +291,7 @@ def create_app() -> FastAPI:
                 session_topic = route_topic
 
             # max_turns 从 intent 派生
-            _INTENT_TURNS = {"learn_concept": 8, "analyze_repo": 12, "review": 6, "chat": 6}
+            _INTENT_TURNS = {"learn_concept": 12, "analyze_repo": 12, "review": 8, "chat": 8}
             max_turns = _INTENT_TURNS.get(session_intent, 8)
 
             logger.info("[ws] route  intent=%s→%s  topic=%s→%s  turns=%d",

@@ -49,7 +49,7 @@ async def agent_loop(
     llm: LLMClient,
     tools: ToolRegistry,
     system: str | None = None,
-    max_turns: int = 8,
+    max_turns: int = 12,
     ask_callback=None,
     on_event=None,
     permission_mode: str = "default",
@@ -233,10 +233,12 @@ def _compact_error_summary(error: str, max_length: int = 140) -> str:
 
 def _build_max_turns_fallback(messages: list[dict]) -> str | None:
     tool_errors = []
+    tool_count = 0
     successful_content = 0
     for msg in messages:
         if msg.get("role") != "tool":
             continue
+        tool_count += 1
         content = msg.get("content", "")
         parsed = None
         if isinstance(content, str):
@@ -251,13 +253,12 @@ def _build_max_turns_fallback(messages: list[dict]) -> str | None:
             else:
                 successful_content += len(str(parsed.get("content") or parsed.get("results") or ""))
 
-    if not tool_errors or successful_content >= 200:
-        return None
-
-    shown = "\n".join(f"- {_compact_error_summary(e, 110)}" for e in tool_errors[-3:])
-    return (
-        "资料不足，当前无法可靠确认结论。\n\n"
-        "本轮检索或读取没有拿到足够可用内容，主要失败信息：\n"
-        f"{shown}\n\n"
-        "建议换一个更具体的问题、提供可访问的资料链接，或稍后重试搜索/网页读取。"
-    )
+    # 始终生成提示，让用户知道已达上限
+    parts = ["已达到本轮操作上限，暂停执行。"]
+    if tool_count > 0:
+        parts.append(f"本轮执行了 {tool_count} 次工具调用。")
+    if tool_errors:
+        shown = "\n".join(f"- {_compact_error_summary(e, 110)}" for e in tool_errors[-3:])
+        parts.append(f"以下操作未成功：\n{shown}")
+    parts.append("如需继续，请回复「继续」或告诉我下一步做什么。")
+    return "\n\n".join(parts)
