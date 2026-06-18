@@ -49,7 +49,27 @@ async def agent_loop(
     on_event=None,
     permission_mode: str = "default",
 ) -> dict:
+    search_count = 0
+    useful_hits = 0
+    MAX_SEARCHES = 5
+
     for _turn in range(max_turns):
+        # 搜索次数超限时，注入强制回应指令
+        if search_count >= MAX_SEARCHES:
+            if useful_hits:
+                msg = "你已经使用了全部搜索次数，现在必须立即根据已有的搜索结果输出完整答案。不要再尝试任何工具调用。如果信息不足，如实告诉用户你知道的部分。"
+            else:
+                msg = "你已经使用了全部搜索次数，但所有搜索都没有获取到有效信息。请直接告诉用户无法找到相关信息，建议用户自行搜索或访问官网。不要编造信息。"
+            inject = {"role": "system", "content": msg}
+            messages.append(inject)
+            assistant_message = await llm.chat(
+                messages=messages,
+                system=system,
+                tools=[],  # 不再提供工具，强制 LLM 文字回复
+            )
+            messages.append(assistant_message)
+            return {"messages": messages, "reason": "max_searches"}
+
         # 通知：开始思考
         if on_event:
             await on_event("thinking", {"turn": _turn + 1, "max_turns": max_turns})
@@ -84,6 +104,10 @@ async def agent_loop(
                 )
                 continue
 
+            # 统计搜索次数（read_url 不消耗搜索次数，搜索到的页面理应可以读取）
+            if call["name"] == "search_web":
+                search_count += 1
+
             # 权限判定：只读自动通过，plan mode 禁止写入
             if tool.is_read_only():
                 pass
@@ -115,6 +139,13 @@ async def agent_loop(
             try:
                 result = await tool.call(call["input"])
                 elapsed = time.time() - t0
+
+                # 检查搜索/读取结果是否包含有效数据
+                if call["name"] == "search_web" and result.get("results"):
+                    useful_hits += 1
+                elif call["name"] == "read_url" and len(result.get("content", "")) > 50:
+                    useful_hits += 1
+
                 summary, extra = _summarize_result(call["name"], result)
                 if on_event:
                     await on_event("tool_end", {

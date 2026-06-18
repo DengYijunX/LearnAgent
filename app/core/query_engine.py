@@ -143,6 +143,7 @@ class LearnQueryEngine:
         if topic_msg:
             result["topic_change"] = topic_msg
 
+        result["_msg_start"] = count_before
         return result
 
     def _save_topic_memory(self, topic: str | None, intent: str, result: dict):

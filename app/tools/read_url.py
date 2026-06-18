@@ -1,5 +1,6 @@
 """ReadUrl 工具 —— 读取网页内容。"""
 
+import os
 import re
 from urllib.parse import urljoin, urlparse
 
@@ -59,7 +60,13 @@ class RealReadUrl(Tool):
         try:
             import httpx
 
-            async with httpx.AsyncClient(timeout=self._timeout, follow_redirects=True) as client:
+            # 从环境变量读取代理
+            proxy = os.environ.get("HTTPS_PROXY") or os.environ.get("HTTP_PROXY") or os.environ.get("ALL_PROXY") or ""
+            client_kwargs = {"timeout": self._timeout, "follow_redirects": True}
+            if proxy:
+                client_kwargs["proxies"] = proxy
+
+            async with httpx.AsyncClient(**client_kwargs) as client:
                 response = await client.get(url, headers={
                     "User-Agent": "Mozilla/5.0 (compatible; LearnAgent/0.2; +https://github.com/DengYijunX/LearnAgent)",
                     "Accept": "text/html,application/xhtml+xml",
@@ -69,10 +76,17 @@ class RealReadUrl(Tool):
                         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36",
                         "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
                         "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8",
+                        "Accept-Encoding": "gzip, deflate, br",
                         "Referer": "https://www.google.com/",
+                        "Cache-Control": "no-cache",
+                        "DNT": "1",
                     })
-                response.raise_for_status()
-                html = response.text
+                # 即使是 403，也尝试提取内容（部分网站有内容但拒绝爬虫）
+                if response.status_code == 403:
+                    html = response.text
+                else:
+                    response.raise_for_status()
+                    html = response.text
 
             text = self._extract_text(html)
             title = self._extract_title(html)

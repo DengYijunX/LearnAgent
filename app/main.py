@@ -17,6 +17,9 @@ try:
 except ImportError:
     msvcrt = None
 
+from prompt_toolkit import PromptSession
+from prompt_toolkit.history import FileHistory
+
 from app.config.settings import get_config
 from app.llm.mock_client import MockLLMClient
 from app.llm.model_selector import ModelSelector
@@ -43,6 +46,7 @@ def _register_workspace_tools(tools: ToolRegistry, workspace_dir: str):
     for name in ("file_write", "file_read", "run_code", "list_files"):
         if tools.find(name):
             del tools._tools[name]
+    workspace_dir = os.path.abspath(workspace_dir)
     os.makedirs(workspace_dir, exist_ok=True)
     tools.register(FileWrite(workspace_root=workspace_dir))
     tools.register(FileRead(workspace_root=workspace_dir))
@@ -73,7 +77,7 @@ async def build_engine(use_real: bool = False, resume_id: str | None = None):
     tools = ToolRegistry()
     if use_real:
         tools.register(RealSearchWeb(max_results=5))
-        tools.register(RealReadUrl(timeout=15))
+        tools.register(RealReadUrl(timeout=30))
         tools.register(RealGitHubAnalyzer(timeout=20))
     else:
         tools.register(MockSearchWeb())
@@ -134,26 +138,16 @@ def _resume_session(engine, session_store, storage_base, resume_id: str):
         print(f"  上一次主题：{engine.current_topic}")
 
 
-_trust_window = {"active": False, "expires_at": 0.0}
-
 async def ask_permission(tool_name: str, reason: str, tool_input: dict | None = None) -> bool:
-    global _trust_window
-    now = time.time()
-    if _trust_window["active"] and now < _trust_window["expires_at"]:
-        if tool_name in ("file_write", "run_code"):
-            return True
+    """每次写操作都需要用户确认，不设免确认窗口。"""
     name_cn = {"file_write": "写入文件", "run_code": "执行代码", "learning_todo_write": "保存学习任务"}.get(tool_name, tool_name)
     print(f"\n  ⚠ {name_cn}")
     if tool_input:
         for k, v in tool_input.items():
             print(f"     {k}: {_format_permission_value(k, v)}")
     try:
-        answer = input("     允许？(y/n，同类操作60s免确认): ").strip().lower()
-        if answer in ("y", "yes", ""):
-            _trust_window["active"] = True
-            _trust_window["expires_at"] = time.time() + 60
-            return True
-        return False
+        answer = input("     允许？(y/n): ").strip().lower()
+        return answer in ("y", "yes", "")
     except (EOFError, KeyboardInterrupt):
         return False
 
@@ -205,7 +199,7 @@ async def on_event(event_type: str, data: dict):
     elif event_type == "topic_change":
         msg = data.get("message", "")
         new_topic = data.get("new_topic", "")
-        storage = os.path.join(get_config().storage_base_dir, "workspace", new_topic or "_default")
+        storage = os.path.dirname(os.path.abspath(get_config().storage_base_dir))
         sys.stdout.write(f"\n  📁 {msg}\n  📂 workspace: {storage}\n")
         sys.stdout.flush()
 
@@ -266,11 +260,16 @@ def _show_summary(messages: list[dict], session_id: str, elapsed: float):
     sys.stdout.flush()
 
 
-def _find_last_text(messages: list[dict]) -> str | None:
-    """取最后一条 assistant 且有 content 的消息。"""
-    for m in reversed(messages):
+def _collect_text(messages: list[dict]) -> str | None:
+    """收集所有 assistant 且有 content 的消息，合并输出。"""
+    parts = []
+    for m in messages:
         if m.get("role") == "assistant" and m.get("content"):
-            return m["content"]
+            content = m["content"].strip()
+            if content:
+                parts.append(content)
+    if parts:
+        return "\n\n---\n\n".join(parts)
     return None
 
 
@@ -291,6 +290,13 @@ def _maybe_merge_pasted_lines(first_line: str) -> str:
     except Exception:
         pass
     return first_line
+
+
+# 使用 prompt_toolkit 独立历史，y/n 权限确认不会混入，且跨会话持久化
+try:
+    _main_session = PromptSession(history=FileHistory(os.path.expanduser("~/.learnagent_history")))
+except Exception:
+    _main_session = None  # 非 Windows 控制台环境（如 Git Bash、CI）回退到 input()
 
 
 async def main():
@@ -318,7 +324,10 @@ async def main():
 
     while True:
         try:
-            user_input = input("> ").strip()
+            if _main_session is not None:
+                user_input = (await _main_session.prompt_async("> ")).strip()
+            else:
+                user_input = input("> ").strip()
         except KeyboardInterrupt:
             now = time.time()
             if _ctrl_c_time > 0 and now - _ctrl_c_time < 2:
@@ -400,10 +409,26 @@ async def main():
             ws_dir = _get_workspace_dir(get_config().storage_base_dir, engine.current_topic)
             _register_workspace_tools(engine.tools, ws_dir)
 
-        # 取最后一条文本回复
-        content = _find_last_text(result.get("messages", []))
+        # 收集本轮新产生的 assistant 文本回复
+        messages = result.get("messages", [])
+        start = result.get("_msg_start", 0)
+        content = _collect_text(messages[start:])
         if content:
-            print(f"\n{content}\n")
+            try:
+                print(f"\n{content}\n")
+            except UnicodeEncodeError:
+                # Windows GBK 终端无法输出 emoji，用 buffer 绕过编码层
+                sys.stdout.buffer.write(f"\n{content}\n\n".encode("utf-8"))
+        elif result.get("reason") == "max_searches":
+            # 搜索次数用尽后 LLM 可能未输出文字，尝试取最后一条 assistant 内容
+            for m in reversed(messages[start:]):
+                if m.get("role") == "assistant" and m.get("content", "").strip():
+                    fallback = m["content"].strip()
+                    try:
+                        print(f"\n{fallback}\n")
+                    except UnicodeEncodeError:
+                        sys.stdout.buffer.write(f"\n{fallback}\n\n".encode("utf-8"))
+                    break
 
         # 收尾栏
         elapsed = time.time() - t_round

@@ -51,13 +51,16 @@ class TestRealSearchWeb:
         from app.tools.search_web import RealSearchWeb
 
         class FakeDDGS:
+            def __init__(self, proxy=None, timeout=None, **kwargs):
+                pass
+
             def __enter__(self):
                 return self
 
             def __exit__(self, exc_type, exc, tb):
                 return False
 
-            def text(self, query, max_results):
+            def text(self, query, max_results, backend=None, **kwargs):
                 return [
                     {"title": "51暗网 - 深网稀缺资源爆料平台", "href": "https://bad.example", "body": "bad"},
                     {"title": "华南师范大学就业创业信息网", "href": "https://career.scnu.edu.cn", "body": "official"},

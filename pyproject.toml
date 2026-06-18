@@ -17,6 +17,7 @@ dependencies = [
     "ddgs>=9.0",
     "fastapi>=0.100",
     "uvicorn[standard]>=0.20",
+    "prompt_toolkit>=3.0",
 ]
 
 [project.optional-dependencies]
