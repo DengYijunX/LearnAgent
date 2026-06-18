@@ -380,6 +380,16 @@ async def main():
             except UnicodeEncodeError:
                 # Windows GBK 终端无法输出 emoji，用 buffer 绕过编码层
                 sys.stdout.buffer.write(f"\n{content}\n\n".encode("utf-8"))
+        elif result.get("reason") == "max_searches":
+            # 搜索次数用尽后 LLM 可能未输出文字，尝试取最后一条 assistant 内容
+            for m in reversed(messages[start:]):
+                if m.get("role") == "assistant" and m.get("content", "").strip():
+                    fallback = m["content"].strip()
+                    try:
+                        print(f"\n{fallback}\n")
+                    except UnicodeEncodeError:
+                        sys.stdout.buffer.write(f"\n{fallback}\n\n".encode("utf-8"))
+                    break
 
         # 收尾栏
         elapsed = time.time() - t_round
