@@ -1,10 +1,58 @@
 """ReadUrl 工具 —— 读取网页内容。"""
 
+import ipaddress
 import os
 import re
+import socket
 from urllib.parse import urljoin, urlparse
 
 from app.tools.base import Tool
+
+# 禁止访问的地址段（防 SSRF）
+_BLOCKED_CIDRS = [
+    ipaddress.ip_network("127.0.0.0/8"),       # loopback
+    ipaddress.ip_network("10.0.0.0/8"),        # private A
+    ipaddress.ip_network("172.16.0.0/12"),     # private B
+    ipaddress.ip_network("192.168.0.0/16"),    # private C
+    ipaddress.ip_network("169.254.0.0/16"),    # link-local / cloud metadata
+    ipaddress.ip_network("0.0.0.0/8"),         # "this" network
+    ipaddress.ip_network("100.64.0.0/10"),     # CGNAT
+    ipaddress.ip_network("198.18.0.0/15"),     # benchmark
+    ipaddress.ip_network("224.0.0.0/4"),       # multicast
+    ipaddress.ip_network("240.0.0.0/4"),       # reserved
+]
+
+
+def _is_safe_url(url: str) -> tuple[bool, str]:
+    """验证 URL 不会访问内网/本地地址。返回 (安全?, 原因)。"""
+    try:
+        parsed = urlparse(url)
+        hostname = parsed.hostname
+        if not hostname:
+            return False, "无法解析主机名"
+
+        addr = ipaddress.ip_address(hostname)
+        for cidr in _BLOCKED_CIDRS:
+            if addr in cidr:
+                return False, f"禁止访问内网地址: {hostname}"
+        return True, ""
+    except ValueError:
+        # 不是 IP 地址，需要 DNS 解析
+        try:
+            resolved = socket.getaddrinfo(hostname, None)
+            for _, _, _, _, sockaddr in resolved:
+                ip = sockaddr[0]
+                addr = ipaddress.ip_address(ip)
+                for cidr in _BLOCKED_CIDRS:
+                    if addr in cidr:
+                        return False, f"禁止访问内网地址: {hostname} → {ip}"
+        except socket.gaierror:
+            return False, f"无法解析域名: {hostname}"
+        except Exception:
+            pass
+        return True, ""
+    except Exception:
+        return False, "URL 格式无效"
 
 
 class MockReadUrl(Tool):
@@ -56,6 +104,10 @@ class RealReadUrl(Tool):
         url = (tool_input.get("url") or "").strip()
         if not url:
             return {"isError": True, "error": "请提供 url 参数。"}
+
+        safe, reason = _is_safe_url(url)
+        if not safe:
+            return {"isError": True, "error": f"安全限制：{reason}"}
 
         try:
             import httpx
