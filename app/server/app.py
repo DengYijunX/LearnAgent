@@ -173,7 +173,7 @@ def create_app() -> FastAPI:
 
                 if msg_type == "chat":
                     content = msg_data.get("content", "")
-                    print(f"Received chat message: {content}")
+                    logger.info("[ws] user_input  session=%s  %s", session_id, content[:120])
 
                     # 更新会话
                     if session and not session.first_message:

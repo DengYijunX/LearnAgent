@@ -97,7 +97,12 @@ async def agent_loop(
 
         tool_calls = extract_tool_calls(assistant_message)
         if not tool_calls:
+            logger.info("turn %d/%d  text reply  %d chars", _turn + 1, max_turns, content_len)
             return {"messages": messages, "reason": "completed"}
+
+        tc_names = [tc.get("name", "?") for tc in tool_calls]
+        logger.info("turn %d/%d  tools=%s  search=%d/%d", _turn + 1, max_turns,
+                    ",".join(tc_names), search_count, MAX_SEARCHES)
 
         tool_results = []
 

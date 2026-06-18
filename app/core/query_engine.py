@@ -1,3 +1,4 @@
+import logging
 import os
 import time
 import uuid
@@ -8,6 +9,8 @@ from app.core.agent_loop import agent_loop
 from app.core.router import topic_distance, normalize_topic
 from app.context.context_builder import build_system_prompt
 from app.context.compaction import compact_messages, estimate_tokens, BUDGET_WARNING
+
+logger = logging.getLogger(__name__)
 
 INTENT_TO_SKILL = {
     "learn_concept": "learn-concept",
@@ -111,8 +114,11 @@ class LearnQueryEngine:
         tokens = estimate_tokens(self.messages)
         if tokens > BUDGET_WARNING:
             self.messages, removed = compact_messages(self.messages)
-            if removed > 0 and self._on_event:
-                await self._on_event("compact", {"removed": removed, "tokens_before": tokens})
+            if removed > 0:
+                logger.info("compacted  %d msgs removed  tokens=%d→%d",
+                           removed, tokens, estimate_tokens(self.messages))
+                if self._on_event:
+                    await self._on_event("compact", {"removed": removed, "tokens_before": tokens})
 
         system_prompt = build_system_prompt(
             current_topic=self.current_topic,

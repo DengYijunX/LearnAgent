@@ -355,6 +355,8 @@ async def main():
         # 多行粘贴检测：Windows 下用 msvcrt.kbhit()
         user_input = _maybe_merge_pasted_lines(user_input)
 
+        logger.info("[cli] user_input: %s", user_input[:120])
+
         # 命令处理
         if user_input.startswith("/"):
             if user_input == "/status":
