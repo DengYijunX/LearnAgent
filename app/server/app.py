@@ -305,6 +305,30 @@ def create_app() -> FastAPI:
                 skill_body=skill_body,
                 plan_mode=(session.permission_mode == "plan" if session else False),
             )
+
+            # 注入工作区已有文件清单（让 LLM 知道哪些文件已存在，避免意外覆盖）
+            tools_for_run = _get_tools_for_topic(effective_topic)
+            workspace_dir = os.path.realpath(
+                os.path.join(os.path.dirname(__file__), "../../storage/workspace",
+                             effective_topic or "_default")
+            )
+            try:
+                existing = os.listdir(workspace_dir)
+                if existing:
+                    file_list = "\n".join(f"  - {f}" for f in sorted(existing)[:30])
+                    note = (
+                        f"\n\n<WORKSPACE_FILES>\n"
+                        f"当前工作区「{effective_topic or '默认'}」已有文件 "
+                        f"（{len(existing)} 个）：\n{file_list}\n"
+                        f"创建新文件时注意不要覆盖不想改的文件。"
+                        f"如需修改已有文件，先用 file_read 读取，再 file_write 写回。\n"
+                        f"</WORKSPACE_FILES>"
+                    )
+                    system_prompt += note
+                    logger.info("[ws] workspace files: %d existing", len(existing))
+            except OSError:
+                pass
+
             logger.info("[ws] session=%s intent=%s topic=%s skill=%s history=%d prompt_len=%d",
                        session_id, intent, effective_topic,
                        skill_name or "none", history_count, len(system_prompt))
@@ -313,7 +337,7 @@ def create_app() -> FastAPI:
                 result = await agent_loop(
                     messages=messages,
                     llm=_llm_client,
-                    tools=_get_tools_for_topic(effective_topic),
+                    tools=tools_for_run,
                     system=system_prompt,
                     max_turns=8,
                     ask_callback=ask_permission,
