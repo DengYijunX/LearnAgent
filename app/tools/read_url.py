@@ -13,6 +13,7 @@ logger = logging.getLogger(__name__)
 
 # 禁止访问的地址段（防 SSRF）
 _BLOCKED_CIDRS = [
+    # IPv4
     ipaddress.ip_network("127.0.0.0/8"),       # loopback
     ipaddress.ip_network("10.0.0.0/8"),        # private A
     ipaddress.ip_network("172.16.0.0/12"),     # private B
@@ -23,6 +24,11 @@ _BLOCKED_CIDRS = [
     ipaddress.ip_network("198.18.0.0/15"),     # benchmark
     ipaddress.ip_network("224.0.0.0/4"),       # multicast
     ipaddress.ip_network("240.0.0.0/4"),       # reserved
+    # IPv6
+    ipaddress.ip_network("::1/128"),           # loopback
+    ipaddress.ip_network("fe80::/10"),         # link-local
+    ipaddress.ip_network("fc00::/7"),          # unique local
+    ipaddress.ip_network("ff00::/8"),          # multicast
 ]
 
 
@@ -122,28 +128,46 @@ class RealReadUrl(Tool):
         try:
             import httpx
 
-            # 从环境变量读取代理
             proxy = os.environ.get("HTTPS_PROXY") or os.environ.get("HTTP_PROXY") or os.environ.get("ALL_PROXY") or ""
-            client_kwargs = {"timeout": self._timeout, "follow_redirects": True}
+            client_kwargs = {"timeout": self._timeout, "follow_redirects": False}
             if proxy:
                 client_kwargs["proxies"] = proxy
 
             async with httpx.AsyncClient(**client_kwargs) as client:
-                response = await client.get(url, headers={
-                    "User-Agent": "Mozilla/5.0 (compatible; LearnAgent/0.2; +https://github.com/DengYijunX/LearnAgent)",
-                    "Accept": "text/html,application/xhtml+xml",
-                })
-                if response.status_code == 403:
-                    response = await client.get(url, headers={
-                        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36",
-                        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-                        "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8",
-                        "Accept-Encoding": "gzip, deflate, br",
-                        "Referer": "https://www.google.com/",
-                        "Cache-Control": "no-cache",
-                        "DNT": "1",
+                # 手动处理重定向，每次跳转都重新验证目标 URL
+                current_url = url
+                for _ in range(5):  # 最多跟 5 次跳转
+                    response = await client.get(current_url, headers={
+                        "User-Agent": "Mozilla/5.0 (compatible; LearnAgent/0.2; +https://github.com/DengYijunX/LearnAgent)",
+                        "Accept": "text/html,application/xhtml+xml",
                     })
-                # 即使是 403，也尝试提取内容（部分网站有内容但拒绝爬虫）
+                    if response.status_code == 403:
+                        response = await client.get(current_url, headers={
+                            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36",
+                            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+                            "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8",
+                            "Accept-Encoding": "gzip, deflate, br",
+                            "Referer": "https://www.google.com/",
+                            "Cache-Control": "no-cache",
+                            "DNT": "1",
+                        })
+
+                    # 检测重定向
+                    if response.status_code in (301, 302, 303, 307, 308):
+                        loc = response.headers.get("Location")
+                        if not loc:
+                            break
+                        # 处理相对 URL
+                        next_url = urljoin(current_url, loc)
+                        safe, reason = _is_safe_url(next_url)
+                        if not safe:
+                            return {"isError": True, "error": f"安全限制：重定向目标 {reason}"}
+                        current_url = next_url
+                        continue
+
+                    break  # 不是重定向，停止跟跳
+
+                # 提取内容
                 if response.status_code == 403:
                     html = response.text
                 else:

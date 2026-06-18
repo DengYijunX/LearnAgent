@@ -84,7 +84,7 @@ class SessionManager:
                 "content": content,
             }
             if tool_call_id:
-                message["toolCallId"] = tool_call_id
+                message["tool_call_id"] = tool_call_id
             session.messages.append(message)
             session.updated_at = datetime.now()
             return session

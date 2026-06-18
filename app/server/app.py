@@ -174,10 +174,19 @@ def create_app() -> FastAPI:
             if _cached_topic == effective and _cached_tools is not None:
                 return _cached_tools
 
-            base = os.path.abspath(
+            # 防止路径穿越（topic 由 LLM/前端提供，不可信）
+            if effective != "_default":
+                if ".." in effective or "/" in effective or "\\" in effective:
+                    effective = "_default"
+                    logger.warning("topic 含非法字符，回退到 _default")
+
+            base = os.path.realpath(
                 os.path.join(os.path.dirname(__file__), "../../storage/workspace")
             )
-            topic_root = os.path.join(base, effective)
+            topic_root = os.path.realpath(os.path.join(base, effective))
+            if not topic_root.startswith(base + os.sep):
+                topic_root = os.path.join(base, "_default")
+                logger.warning("topic 路径逃逸，回退到 _default")
             os.makedirs(topic_root, exist_ok=True)
 
             reg = ToolRegistry()
@@ -242,6 +251,15 @@ def create_app() -> FastAPI:
             history_messages = session.messages.copy() if session else []
             history_count = len(history_messages)
             messages = history_messages.copy()
+
+            # 上下文压缩（与 CLI 同步）
+            from app.context.compaction import estimate_tokens, compact_messages, BUDGET_WARNING
+            tokens = estimate_tokens(messages)
+            if tokens > BUDGET_WARNING:
+                messages, removed = compact_messages(messages)
+                if removed > 0:
+                    logger.info("compacted  %d msgs removed  tokens=%d→%d",
+                               removed, tokens, estimate_tokens(messages))
 
             system_prompt = build_system_prompt(
                 current_topic=session.topic if session else None,

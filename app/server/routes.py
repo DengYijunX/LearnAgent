@@ -117,47 +117,38 @@ async def delete_session(session_id: str):
 
 @router.post("/chat", response_model=ChatResponse, status_code=202)
 async def send_chat(req: ChatRequest):
-    # Actual processing happens via WebSocket
+    """通过 HTTP 创建会话（实际对话走 WebSocket）。"""
     session_id = req.session_id
     if not session_id:
         from .app import get_session_manager
         session_mgr = get_session_manager()
-        session = await session_mgr.create_session()
+        session = await session_mgr.create_session(topic=req.topic)
         session_id = session.session_id
     return {
         "session_id": session_id,
-        "message": "Agent has started processing, receive events via WebSocket",
+        "message": f"会话已就绪。连接到 ws://host/ws/{session_id} 开始对话。",
     }
 
 
 @router.get("/tools", response_model=ToolsResponse)
 async def list_tools():
+    from .app import get_tool_registry
+    registry = get_tool_registry()
     return {
         "tools": [
-            {
-                "name": "search_web",
-                "description": "Search the web for information",
-                "read_only": True,
-            },
-            {
-                "name": "read_url",
-                "description": "Read and summarize web page content",
-                "read_only": True,
-            },
-            {
-                "name": "file_write",
-                "description": "Write content to a file",
-                "read_only": False,
-            },
+            {"name": name, "description": t.description, "read_only": t.is_read_only()}
+            for name, t in registry._tools.items()
         ]
     }
 
 
 @router.get("/config", response_model=ConfigInfo)
 async def get_config():
+    from app.config.settings import get_config as get_app_config
+    cfg = get_app_config()
     return {
-        "model_mode": "normal",
-        "base_url": "https://api.deepseek.com/v1",
-        "storage_dir": "storage",
-        "api_key_configured": True,
+        "model_mode": cfg.model_mode,
+        "base_url": cfg.base_url,
+        "storage_dir": cfg.storage_base_dir,
+        "api_key_configured": bool(cfg.api_key),
     }
