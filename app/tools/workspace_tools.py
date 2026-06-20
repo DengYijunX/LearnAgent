@@ -229,14 +229,41 @@ class RunCode(Tool):
                     proc.communicate(), timeout=self._timeout
                 )
             except asyncio.TimeoutError:
-                try:
-                    proc.kill()
-                except Exception:
-                    pass
+                proc.kill()
                 try:
                     stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=5)
                 except asyncio.TimeoutError:
-                    stdout = b""; stderr = b"(process not terminated)"
+                    stdout = b""; stderr = b""
+                # python xxx.py 超时 → 很可能是服务进程，切后台
+                if command.strip().startswith("python ") and pm is not None:
+                    logger.info("timeout → restarting as background: %s", command[:80])
+                    port = None
+                    m = self._PORT_RE.search(command)
+                    if m:
+                        port = int(m.group(1))
+                    try:
+                        from app.core.session_context import current_session_id
+                    except ImportError:
+                        current_session_id = None
+                    sid = current_session_id.get() if current_session_id else ""
+                    try:
+                        mp = await pm.start(command, cwd=self._root,
+                                           session_id=sid, port=port)
+                        return {
+                            "isError": False,
+                            "pid": mp.pid,
+                            "port": port,
+                            "is_server": True,
+                            "message": f"命令超时后已转为后台运行 (PID {mp.pid})"
+                                      + (f"，端口 {port}" if port else ""),
+                            "stop_command": f"taskkill /F /PID {mp.pid}" if os.name == "nt"
+                                            else f"kill {mp.pid}",
+                        }
+                    except Exception as e:
+                        return {
+                            "isError": True,
+                            "error": f"命令超时且后台启动失败：{e}  cmd={command[:80]}",
+                        }
                 return {
                     "isError": True,
                     "error": f"命令超时（{self._timeout}s）：{command[:80]}",
