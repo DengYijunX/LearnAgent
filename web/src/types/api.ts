@@ -16,6 +16,22 @@ export interface SessionDetail extends SessionSummary {
   messages: Message[]
 }
 
+export interface SessionSummaryResponse {
+  id: string
+  message_count: number
+  first_message: string
+  topic: string | null
+  intent?: string
+  created_at: string
+  updated_at: string
+}
+
+export interface SessionDetailResponse extends SessionSummaryResponse {
+  intent: string
+  permission_mode: 'default' | 'plan'
+  messages: Message[]
+}
+
 // 聊天相关类型
 export interface ChatRequest {
   content: string
@@ -46,7 +62,7 @@ export interface ConfigInfo {
 
 // API 响应类型
 export interface SessionsResponse {
-  sessions: SessionSummary[]
+  sessions: SessionSummaryResponse[]
 }
 
 export interface CreateSessionResponse {

@@ -37,7 +37,7 @@ html, body, #app { min-width: 1080px; min-height: 100%; }
 
 body {
   margin: 0;
-  overflow: hidden;
+  overflow: clip;
   background: var(--canvas);
   color: var(--ink);
 }
@@ -49,7 +49,7 @@ button { -webkit-tap-highlight-color: transparent; }
   position: relative;
   height: 100vh;
   min-height: 680px;
-  overflow: hidden;
+  overflow: clip;
   padding: 14px;
   isolation: isolate;
   background:

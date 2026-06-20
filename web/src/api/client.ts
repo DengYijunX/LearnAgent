@@ -1,6 +1,8 @@
 import type {
   SessionSummary,
   SessionDetail,
+  SessionSummaryResponse,
+  SessionDetailResponse,
   SessionsResponse,
   CreateSessionResponse,
   DeleteSessionResponse,
@@ -11,6 +13,18 @@ import type {
 } from '../types/api'
 
 const API_BASE = '/api'
+
+function normalizeSession(summary: SessionSummaryResponse): SessionSummary {
+  return {
+    id: summary.id,
+    messageCount: summary.message_count,
+    firstMessage: summary.first_message,
+    topic: summary.topic,
+    intent: summary.intent || 'chat',
+    createdAt: summary.created_at,
+    updatedAt: summary.updated_at
+  }
+}
 
 async function request<T>(
   endpoint: string,
@@ -36,7 +50,7 @@ export const sessionApi = {
   // 获取所有会话
   async getSessions(): Promise<SessionSummary[]> {
     const res = await request<SessionsResponse>('/sessions')
-    return res.sessions
+    return res.sessions.map(normalizeSession)
   },
 
   // 创建新会话
@@ -48,7 +62,12 @@ export const sessionApi = {
 
   // 获取会话详情
   async getSession(id: string): Promise<SessionDetail> {
-    return request<SessionDetail>(`/sessions/${id}`)
+    const detail = await request<SessionDetailResponse>(`/sessions/${id}`)
+    return {
+      ...normalizeSession(detail),
+      permissionMode: detail.permission_mode,
+      messages: detail.messages
+    }
   },
 
   // 删除会话
