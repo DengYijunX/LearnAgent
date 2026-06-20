@@ -10,6 +10,7 @@ import { useWebSocket } from '../../composables/useWebSocket'
 
 const chatStore = useChatStore()
 const sessionStore = useSessionStore()
+const chatInputRef = ref<InstanceType<typeof ChatInput> | null>(null)
 const {
   connect,
   disconnect,
@@ -115,6 +116,10 @@ function handleStop() {
   sendCancel()
 }
 
+function handlePromptSelect(prompt: string) {
+  chatInputRef.value?.setDraft(prompt)
+}
+
 // 切换模式
 function toggleMode() {
   const newMode = sessionStore.permissionMode === 'plan' ? 'default' : 'plan'
@@ -146,15 +151,16 @@ defineExpose({
 </script>
 
 <template>
-  <div class="flex flex-col h-full bg-slate-900">
+  <div class="relative flex h-full min-w-0 flex-col bg-white/20">
     <!-- 顶部栏 -->
     <AppHeader @toggle-mode="toggleMode" />
 
     <!-- 消息列表 -->
-    <MessageList />
+    <MessageList @select-prompt="handlePromptSelect" />
 
     <!-- 输入框 -->
     <ChatInput
+      ref="chatInputRef"
       @send="handleSend"
       @stop="handleStop"
     />
@@ -168,7 +174,10 @@ defineExpose({
     <!-- 连接中指示器 -->
     <div
       v-if="isConnecting"
-      class="absolute top-0 left-0 right-0 h-1 bg-blue-500 animate-pulse"
-    />
+      class="pointer-events-none absolute left-1/2 top-[76px] z-30 -translate-x-1/2 rounded-full border border-blue-100 bg-white/90 px-3 py-1.5 text-[11px] font-medium text-blue-700 shadow-lg backdrop-blur-xl"
+      role="status"
+    >
+      正在连接会话…
+    </div>
   </div>
 </template>

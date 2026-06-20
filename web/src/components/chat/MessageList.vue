@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { ref, watch, nextTick, computed } from 'vue'
+import { computed, nextTick, ref, watch } from 'vue'
+import { ArrowUpRight, BookOpenText, Code2, GitBranch, Layers3, Sparkles } from 'lucide-vue-next'
 import { useChatStore } from '../../stores/chat'
 import MessageBubble from './MessageBubble.vue'
 import ToolCallCard from './ToolCallCard.vue'
@@ -7,112 +8,112 @@ import ToolCallCard from './ToolCallCard.vue'
 const chatStore = useChatStore()
 const containerRef = ref<HTMLElement | null>(null)
 
-// 过滤出工具调用卡片
-const toolCallEntries = computed(() => {
-  return Array.from(chatStore.activeToolCalls.entries())
-})
+const emit = defineEmits<{
+  (e: 'select-prompt', prompt: string): void
+}>()
 
-// 滚动到底部
+const suggestions = [
+  {
+    icon: BookOpenText,
+    eyebrow: '理解概念',
+    title: '系统学习一个新主题',
+    prompt: '我想系统学习 Python 异步编程，请先了解我的基础并制定学习路径。'
+  },
+  {
+    icon: Code2,
+    eyebrow: '动手实践',
+    title: '通过小项目边做边学',
+    prompt: '带我用一个小项目学习 FastAPI，从需求拆解开始，一步步实践。'
+  },
+  {
+    icon: GitBranch,
+    eyebrow: '阅读项目',
+    title: '分析仓库并规划阅读顺序',
+    prompt: '我想读懂当前代码仓库，请先分析结构，再给我一条循序渐进的阅读路线。'
+  }
+]
+
+const toolCallEntries = computed(() => Array.from(chatStore.activeToolCalls.entries()))
+
 function scrollToBottom() {
   nextTick(() => {
-    if (containerRef.value) {
-      containerRef.value.scrollTop = containerRef.value.scrollHeight
-    }
+    if (containerRef.value) containerRef.value.scrollTop = containerRef.value.scrollHeight
   })
 }
 
-// 监听消息变化自动滚动
 watch(
-  () => [
-    chatStore.messages.length,
-    chatStore.activeToolCalls.size,
-    chatStore.isProcessing
-  ],
-  () => {
-    scrollToBottom()
-  },
+  () => [chatStore.messages.length, chatStore.activeToolCalls.size, chatStore.isProcessing],
+  scrollToBottom,
   { deep: true }
 )
 
-// 初始滚动
 scrollToBottom()
 </script>
 
 <template>
-  <div
-    ref="containerRef"
-    class="flex-1 overflow-y-auto p-4 space-y-4"
-  >
-    <!-- 欢迎消息 -->
+  <div ref="containerRef" class="relative flex-1 overflow-y-auto px-7 pb-8 pt-6">
     <div
       v-if="chatStore.messages.length === 0 && !chatStore.isProcessing"
-      class="flex flex-col items-center justify-center h-full text-center"
+      class="mx-auto flex h-full max-w-[860px] flex-col justify-center py-10"
     >
-      <div class="w-16 h-16 mb-4 rounded-full bg-slate-800 flex items-center justify-center">
-        <svg class="w-8 h-8 text-blue-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M12 2L2 7l10 5 10-5-10-5z" />
-          <path d="M2 17l10 5 10-5" />
-          <path d="M2 12l10 5 10-5" />
-        </svg>
+      <div class="mb-8 flex items-center gap-4">
+        <div class="relative flex h-[58px] w-[58px] shrink-0 items-center justify-center rounded-[20px] bg-[linear-gradient(145deg,#5b93ff,#2867df)] text-white shadow-[0_14px_34px_rgba(47,107,232,0.24),inset_0_1px_0_rgba(255,255,255,0.35)]">
+          <Layers3 :size="27" :stroke-width="2" />
+          <Sparkles :size="13" class="absolute -right-1 -top-1 text-blue-200" />
+        </div>
+        <div>
+          <p class="text-[11px] font-semibold uppercase tracking-[0.18em] text-[var(--primary)]">LearnAgent workspace</p>
+          <h3 class="mt-1 text-[30px] font-semibold tracking-[-0.045em] text-[var(--ink)]">今天想学点什么？</h3>
+        </div>
       </div>
-      <h3 class="text-lg font-medium text-slate-200 mb-2">开始学习</h3>
-      <p class="text-sm text-slate-500 max-w-md">
-        输入你想学习的主题，比如"Python 基础"、"React 框架"或"如何设计 API"，我会帮你系统性地学习和掌握。
+
+      <p class="max-w-[620px] text-[15px] leading-7 text-[var(--ink-secondary)]">
+        从一个真实问题开始。我们可以一起发现资料、理解概念、动手实践，再把学到的东西沉淀下来。
       </p>
+
+      <div class="mt-8 grid grid-cols-3 gap-3">
+        <button
+          v-for="suggestion in suggestions"
+          :key="suggestion.title"
+          type="button"
+          class="focus-ring group cursor-pointer rounded-[18px] border border-white/78 bg-white/52 p-4 text-left shadow-[0_8px_24px_rgba(58,78,108,0.06),inset_0_1px_0_rgba(255,255,255,0.9)] backdrop-blur-xl transition-[background-color,border-color,box-shadow] duration-200 hover:border-blue-200/80 hover:bg-white/76 hover:shadow-[0_12px_30px_rgba(58,78,108,0.1)]"
+          @click="emit('select-prompt', suggestion.prompt)"
+        >
+          <div class="mb-5 flex items-center justify-between">
+            <span class="flex h-9 w-9 items-center justify-center rounded-[12px] bg-blue-50 text-[var(--primary)]">
+              <component :is="suggestion.icon" :size="17" />
+            </span>
+            <ArrowUpRight :size="15" class="text-[var(--ink-muted)] transition-colors group-hover:text-[var(--primary)]" />
+          </div>
+          <p class="text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--ink-muted)]">{{ suggestion.eyebrow }}</p>
+          <p class="mt-1.5 text-[13px] font-semibold leading-5 text-[var(--ink)]">{{ suggestion.title }}</p>
+        </button>
+      </div>
     </div>
 
-    <!-- 消息列表 -->
-    <template v-else>
-      <div
-        v-for="message in chatStore.messages"
-        :key="message.id"
-        class="animate-fadeIn"
-      >
-        <!-- 工具消息不显示气泡，而是显示卡片 -->
+    <div v-else class="mx-auto max-w-[860px] space-y-6">
+      <div v-for="message in chatStore.messages" :key="message.id" class="animate-fadeIn">
         <ToolCallCard
           v-if="message.role === 'tool' && message.toolCallId"
           v-for="[id, toolCall] in toolCallEntries"
           :key="id"
           v-show="toolCall.id === message.toolCallId"
-          :toolCall="toolCall"
+          :tool-call="toolCall"
         />
-
-        <!-- 普通消息显示气泡 -->
-        <MessageBubble
-          v-else-if="message.role !== 'tool'"
-          :message="message"
-        />
+        <MessageBubble v-else-if="message.role !== 'tool'" :message="message" />
       </div>
-    </template>
 
-    <!-- 处理中指示器 -->
-    <div
-      v-if="chatStore.isProcessing && chatStore.messages.length > 0"
-      class="flex items-center gap-3 text-slate-400"
-    >
-      <div class="flex gap-1">
-        <span class="w-2 h-2 bg-slate-500 rounded-full animate-bounce" style="animation-delay: 0ms" />
-        <span class="w-2 h-2 bg-slate-500 rounded-full animate-bounce" style="animation-delay: 150ms" />
-        <span class="w-2 h-2 bg-slate-500 rounded-full animate-bounce" style="animation-delay: 300ms" />
+      <div
+        v-if="chatStore.isProcessing && chatStore.messages.length > 0"
+        class="flex items-center gap-3 rounded-[16px] border border-white/70 bg-white/42 px-4 py-3 text-[var(--ink-secondary)] backdrop-blur-xl"
+      >
+        <div class="flex gap-1">
+          <span class="h-1.5 w-1.5 animate-bounce rounded-full bg-blue-400" style="animation-delay: 0ms" />
+          <span class="h-1.5 w-1.5 animate-bounce rounded-full bg-blue-500" style="animation-delay: 150ms" />
+          <span class="h-1.5 w-1.5 animate-bounce rounded-full bg-blue-600" style="animation-delay: 300ms" />
+        </div>
+        <span class="text-[12px] font-medium">LearnAgent 正在组织下一步…</span>
       </div>
-      <span class="text-sm">Agent 正在思考...</span>
     </div>
   </div>
 </template>
-
-<style scoped>
-@keyframes fadeIn {
-  from {
-    opacity: 0;
-    transform: translateY(8px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-.animate-fadeIn {
-  animation: fadeIn 0.15s ease-out;
-}
-</style>
