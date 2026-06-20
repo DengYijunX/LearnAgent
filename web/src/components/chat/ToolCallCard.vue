@@ -1,37 +1,33 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { computed, ref } from 'vue'
+import {
+  ChevronDown, CircleCheck, CircleX, FileText, FolderOpen, Github, Globe,
+  LoaderCircle, Search, Terminal, Wrench
+} from 'lucide-vue-next'
 import type { ToolCallState } from '../../types/chat'
 
-const props = defineProps<{
-  toolCall: ToolCallState
-}>()
-
+const props = defineProps<{ toolCall: ToolCallState }>()
 const isExpanded = ref(false)
 
-const statusIcon = computed(() => {
-  switch (props.toolCall.status) {
-    case 'running':
-      return '⏳'
-    case 'done':
-      return '✅'
-    case 'error':
-      return '❌'
-    default:
-      return '❓'
+const status = computed(() => {
+  if (props.toolCall.status === 'running') {
+    return { icon: LoaderCircle, label: '执行中', tone: 'text-blue-700', rail: 'bg-blue-500', surface: 'bg-blue-50/58 border-blue-100/80' }
   }
+  if (props.toolCall.status === 'done') {
+    return { icon: CircleCheck, label: '已完成', tone: 'text-emerald-700', rail: 'bg-emerald-500', surface: 'bg-emerald-50/42 border-emerald-100/80' }
+  }
+  return { icon: CircleX, label: '执行失败', tone: 'text-red-700', rail: 'bg-red-500', surface: 'bg-red-50/48 border-red-100/80' }
 })
 
-const borderColor = computed(() => {
-  switch (props.toolCall.status) {
-    case 'running':
-      return 'border-amber-500/50'
-    case 'done':
-      return 'border-emerald-500/50'
-    case 'error':
-      return 'border-red-500/50'
-    default:
-      return 'border-slate-600'
-  }
+const toolIcon = computed(() => {
+  const name = props.toolCall.name.toLowerCase()
+  if (name.includes('search')) return Search
+  if (name.includes('url') || name.includes('web')) return Globe
+  if (name.includes('github') || name.includes('repo')) return Github
+  if (name.includes('file') || name.includes('read')) return FileText
+  if (name.includes('workspace') || name.includes('folder')) return FolderOpen
+  if (name.includes('code') || name.includes('command') || name.includes('run')) return Terminal
+  return Wrench
 })
 
 const elapsedText = computed(() => {
@@ -41,113 +37,62 @@ const elapsedText = computed(() => {
 })
 
 function toggleExpand() {
-  if (props.toolCall.status !== 'running') {
-    isExpanded.value = !isExpanded.value
-  }
+  if (props.toolCall.status !== 'running') isExpanded.value = !isExpanded.value
 }
 </script>
 
 <template>
-  <div
-    class="rounded-lg overflow-hidden transition-all duration-200"
-    :class="[
-      'bg-slate-900 border-l-4',
-      borderColor
-    ]"
-  >
-    <!-- 头部：工具名称和状态 -->
-    <div
+  <div class="relative ml-[46px] overflow-hidden rounded-[17px] border bg-white/62 shadow-[0_8px_24px_rgba(59,79,109,0.055),inset_0_1px_0_rgba(255,255,255,0.9)] backdrop-blur-xl" :class="status.surface">
+    <span class="absolute bottom-3 left-0 top-3 w-[3px] rounded-r-full" :class="status.rail" aria-hidden="true" />
+
+    <button
+      type="button"
+      class="focus-ring flex w-full items-center gap-3 px-4 py-3.5 text-left transition-colors duration-200"
+      :class="toolCall.status === 'running' ? 'cursor-default' : 'cursor-pointer hover:bg-white/48'"
+      :aria-expanded="toolCall.status === 'running' ? undefined : isExpanded"
       @click="toggleExpand"
-      class="px-4 py-3 flex items-center justify-between cursor-pointer hover:bg-slate-800/50"
-      :class="{ 'cursor-default': toolCall.status === 'running' }"
     >
-      <div class="flex items-center gap-3">
-        <span class="text-lg">{{ statusIcon }}</span>
-        <div>
-          <p class="text-sm font-medium text-slate-200">
-            {{ toolCall.name }}
-          </p>
-          <p class="text-xs text-slate-400 mt-0.5">
-            {{ toolCall.description }}
-          </p>
-        </div>
-      </div>
+      <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-[12px] border border-white/80 bg-white/68 text-[var(--primary)] shadow-sm">
+        <component :is="toolIcon" :size="17" />
+      </span>
 
-      <div class="flex items-center gap-3">
-        <!-- 耗时 -->
-        <span
-          v-if="elapsedText"
-          class="text-xs px-2 py-1 rounded bg-slate-800 text-slate-400"
-        >
-          {{ elapsedText }}
+      <span class="min-w-0 flex-1">
+        <span class="flex items-center gap-2">
+          <span class="truncate text-[13px] font-semibold text-[var(--ink)]">{{ toolCall.name }}</span>
+          <span class="flex items-center gap-1 text-[10px] font-semibold" :class="status.tone">
+            <component :is="status.icon" :size="12" :class="{ 'animate-spin': toolCall.status === 'running' }" />
+            {{ status.label }}
+          </span>
         </span>
+        <span class="mt-1 block truncate text-[11px] text-[var(--ink-muted)]">{{ toolCall.description }}</span>
+      </span>
 
-        <!-- 展开/收起图标 -->
-        <svg
-          v-if="toolCall.status !== 'running'"
-          class="w-4 h-4 text-slate-500 transition-transform"
-          :class="{ 'rotate-180': isExpanded }"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="2"
-        >
-          <path d="M19 9l-7 7-7-7" />
-        </svg>
-      </div>
-    </div>
+      <span v-if="elapsedText" class="rounded-lg border border-white/75 bg-white/54 px-2 py-1 text-[10px] tabular-nums text-[var(--ink-muted)]">{{ elapsedText }}</span>
+      <ChevronDown
+        v-if="toolCall.status !== 'running'"
+        :size="15"
+        class="text-[var(--ink-muted)] transition-transform duration-200"
+        :class="{ 'rotate-180': isExpanded }"
+      />
+    </button>
 
-    <!-- 展开内容 -->
-    <div
-      v-if="isExpanded && toolCall.status !== 'running'"
-      class="px-4 pb-4 border-t border-slate-800"
-    >
-      <!-- 结果摘要 -->
-      <div
-        v-if="toolCall.resultSummary"
-        class="mt-3 text-sm text-slate-300 whitespace-pre-wrap"
-      >
-        {{ toolCall.resultSummary }}
-      </div>
+    <div v-if="isExpanded && toolCall.status !== 'running'" class="border-t border-[var(--line)] px-4 pb-4 pt-3">
+      <p v-if="toolCall.resultSummary" class="whitespace-pre-wrap text-[12px] leading-6 text-[var(--ink-secondary)]">{{ toolCall.resultSummary }}</p>
 
-      <!-- 搜索结果标题列表 -->
-      <div
-        v-if="toolCall.resultTitles && toolCall.resultTitles.length > 0"
-        class="mt-3 space-y-2"
-      >
-        <p class="text-xs text-slate-500 uppercase tracking-wider">搜索结果</p>
-        <ul class="space-y-1">
-          <li
-            v-for="(title, index) in toolCall.resultTitles"
-            :key="index"
-            class="text-sm text-slate-300 flex items-start gap-2"
-          >
-            <span class="text-slate-500">{{ index + 1 }}.</span>
+      <div v-if="toolCall.resultTitles?.length" class="mt-3 rounded-[13px] border border-white/76 bg-white/48 p-3">
+        <p class="mb-2 text-[10px] font-semibold uppercase tracking-[0.13em] text-[var(--ink-muted)]">结果摘要</p>
+        <ol class="space-y-1.5">
+          <li v-for="(title, index) in toolCall.resultTitles" :key="index" class="flex gap-2 text-[12px] leading-5 text-[var(--ink-secondary)]">
+            <span class="font-medium tabular-nums text-[var(--primary)]">{{ index + 1 }}.</span>
             <span>{{ title }}</span>
           </li>
-        </ul>
+        </ol>
       </div>
 
-      <!-- 输入参数 -->
-      <div class="mt-3">
-        <p class="text-xs text-slate-500 uppercase tracking-wider mb-1">输入参数</p>
-        <pre class="text-xs text-slate-400 bg-slate-950 p-2 rounded overflow-x-auto">{{ JSON.stringify(toolCall.input, null, 2) }}</pre>
-      </div>
-    </div>
-
-    <!-- 运行中动画 -->
-    <div
-      v-if="toolCall.status === 'running'"
-      class="px-4 pb-3"
-    >
-      <div class="flex items-center gap-2 mt-2">
-        <div class="flex gap-1">
-          <span class="w-1.5 h-1.5 bg-amber-500 rounded-full animate-bounce" style="animation-delay: 0ms" />
-          <span class="w-1.5 h-1.5 bg-amber-500 rounded-full animate-bounce" style="animation-delay: 150ms" />
-          <span class="w-1.5 h-1.5 bg-amber-500 rounded-full animate-bounce" style="animation-delay: 300ms" />
-        </div>
-        <span class="text-xs text-slate-500">执行中...</span>
-      </div>
+      <details class="mt-3">
+        <summary class="cursor-pointer text-[10px] font-semibold uppercase tracking-[0.13em] text-[var(--ink-muted)]">输入参数</summary>
+        <pre class="mt-2 max-h-56 overflow-auto rounded-[12px] border border-[var(--line)] bg-[#f7f9fc] p-3 text-[11px] leading-5 text-[#496078]">{{ JSON.stringify(toolCall.input, null, 2) }}</pre>
+      </details>
     </div>
   </div>
 </template>

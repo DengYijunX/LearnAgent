@@ -138,8 +138,19 @@ textarea:focus-visible {
          hover:bg-white hover:text-slate-700 transition-colors;
   border: 1px solid #e8ecf1;
 }
+.code-block-header .copy-btn:focus-visible { outline: 2px solid rgba(57, 120, 246, 0.28); outline-offset: 2px; }
 .code-block-wrapper pre {
   @apply m-0 p-4 bg-[#fafbfd] overflow-x-auto text-[0.85rem] leading-relaxed;
+}
+
+.prose :where(p, ul, ol, pre, blockquote):first-child { margin-top: 0; }
+.prose :where(p, ul, ol, pre, blockquote):last-child { margin-bottom: 0; }
+.prose blockquote {
+  border-left-color: rgba(57, 120, 246, 0.35);
+  color: var(--ink-secondary);
+  background: rgba(237, 244, 255, 0.56);
+  border-radius: 0 12px 12px 0;
+  padding: 0.65rem 0.9rem;
 }
 
 /* ── highlight.js 浅色主题 ── */

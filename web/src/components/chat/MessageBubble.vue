@@ -1,20 +1,22 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
+import { Layers3 } from 'lucide-vue-next'
 import { renderMarkdown } from '../../utils/markdown'
 import type { Message } from '../../types/chat'
 
-const props = defineProps<{
-  message: Message
-}>()
-
-const renderedContent = computed(() => {
-  if (props.message.role === 'user') return null
-  return renderMarkdown(props.message.content)
-})
-
+const props = defineProps<{ message: Message }>()
 const bubbleRef = ref<HTMLElement | null>(null)
 
-// 代码块复制按钮事件委托 + 渲染结果注入
+const renderedContent = computed(() =>
+  props.message.role === 'user' ? null : renderMarkdown(props.message.content)
+)
+
+const timeStr = computed(() =>
+  new Date(props.message.timestamp).toLocaleTimeString('zh-CN', {
+    hour: '2-digit', minute: '2-digit'
+  })
+)
+
 onMounted(() => {
   const el = bubbleRef.value
   if (!el) return
@@ -28,45 +30,40 @@ onMounted(() => {
     })
   })
 })
-
-const timeStr = computed(() =>
-  new Date(props.message.timestamp).toLocaleTimeString('zh-CN', {
-    hour: '2-digit', minute: '2-digit'
-  })
-)
 </script>
 
 <template>
-  <div class="flex" :class="message.role === 'user' ? 'justify-end' : 'justify-start'">
-    <!-- 助手消息：白底卡片 + 微阴影 -->
-    <div
-      v-if="message.role === 'assistant'"
-      ref="bubbleRef"
-      class="max-w-[80%] bg-white/[0.85] backdrop-blur-xl rounded-2xl px-5 py-3.5
-             shadow-[0_1px_3px_rgba(0,0,0,0.04),0_4px_16px_rgba(0,0,0,0.03)]
-             border border-white/80
-             prose prose-slate prose-sm max-w-none
-             prose-headings:font-semibold prose-headings:tracking-tight
-             prose-pre:bg-[#f8f9fc] prose-pre:shadow-none prose-pre:border prose-pre:border-[#e8ecf1]
-             prose-code:bg-[#f0f3f8] prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded-md prose-code:text-[#334155] prose-code:font-normal prose-code:text-[0.88em]
-             prose-a:text-[#5b7fff] prose-a:no-underline hover:prose-a:underline"
-      v-html="renderedContent"
-    />
-
-    <!-- 用户消息：浅蓝气泡 -->
-    <div
-      v-else
-      class="max-w-[75%] bg-gradient-to-br from-[#5b7fff]/12 to-[#8b5cf6]/08
-             backdrop-blur-md rounded-2xl px-4 py-2.5
-             border border-[#5b7fff]/15
-             text-slate-700 whitespace-pre-wrap text-[0.92rem] leading-relaxed"
-    >
-      {{ message.content }}
+  <div v-if="message.role === 'assistant'" class="group flex items-start gap-3.5">
+    <div class="mt-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-[11px] bg-[linear-gradient(145deg,#5b93ff,#2867df)] text-white shadow-[0_6px_16px_rgba(47,107,232,0.2)]">
+      <Layers3 :size="15" :stroke-width="2.2" />
     </div>
+    <div class="min-w-0 flex-1">
+      <div class="mb-2 flex items-center gap-2">
+        <span class="text-[12px] font-semibold text-[var(--ink)]">LearnAgent</span>
+        <span class="text-[10px] tabular-nums text-[var(--ink-muted)]">{{ timeStr }}</span>
+      </div>
+      <div
+        ref="bubbleRef"
+        class="overflow-hidden rounded-[18px] border border-white/82 bg-white/76 px-5 py-4 shadow-[0_10px_30px_rgba(59,79,109,0.07),inset_0_1px_0_rgba(255,255,255,0.95)] backdrop-blur-xl
+               prose prose-slate prose-sm max-w-none
+               prose-headings:font-semibold prose-headings:tracking-[-0.025em] prose-headings:text-[var(--ink)]
+               prose-p:leading-7 prose-p:text-[var(--ink-secondary)]
+               prose-li:leading-7 prose-li:text-[var(--ink-secondary)]
+               prose-strong:text-[var(--ink)]
+               prose-pre:m-0 prose-pre:bg-[#f8fafc] prose-pre:shadow-none
+               prose-code:bg-[#eef3f8] prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded-md prose-code:text-[#315071] prose-code:font-normal prose-code:text-[0.88em]
+               prose-a:text-[var(--primary)] prose-a:no-underline hover:prose-a:underline"
+        v-html="renderedContent"
+      />
+    </div>
+  </div>
 
-    <span
-      class="text-[0.7rem] text-slate-400/70 mt-1 px-1"
-      :class="message.role === 'user' ? 'order-first' : ''"
-    >{{ timeStr }}</span>
+  <div v-else class="flex justify-end">
+    <div class="max-w-[72%]">
+      <div class="rounded-[18px] rounded-tr-[7px] border border-blue-200/55 bg-[linear-gradient(145deg,rgba(227,239,255,0.88),rgba(238,245,255,0.72))] px-4 py-3 text-[14px] leading-6 text-[#27415f] shadow-[0_7px_22px_rgba(55,106,175,0.08),inset_0_1px_0_rgba(255,255,255,0.8)] backdrop-blur-xl whitespace-pre-wrap">
+        {{ message.content }}
+      </div>
+      <p class="mt-1.5 pr-1 text-right text-[10px] tabular-nums text-[var(--ink-muted)]">{{ timeStr }}</p>
+    </div>
   </div>
 </template>
