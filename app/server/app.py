@@ -164,7 +164,7 @@ def create_app() -> FastAPI:
 
         pm = get_process_manager()
         if pm:
-            pm.add_output_callback(on_process_output)
+            pm.add_output_callback(session_id, on_process_output)
 
         session_mgr = get_session_manager()
         session = await session_mgr.get_session(session_id)
@@ -380,6 +380,8 @@ def create_app() -> FastAPI:
                        skill_name or "none", history_count, len(system_prompt))
 
             try:
+                # 让 RunCode 子进程知道当前 session
+                os.environ["LEARNAGENT_SESSION_ID"] = session_id
                 result = await agent_loop(
                     messages=messages,
                     llm=_llm_client,
@@ -451,7 +453,7 @@ def create_app() -> FastAPI:
 
                 elif msg_type == "list_processes":
                     if pm:
-                        procs = pm.list_all()
+                        procs = pm.list_all(session_id=session_id)
                         await websocket.send_json({
                             "type": "process_list",
                             "data": {"processes": procs}
@@ -460,7 +462,7 @@ def create_app() -> FastAPI:
                 elif msg_type == "stop_process":
                     pid = msg_data.get("pid")
                     if pid and pm:
-                        ok = await pm.stop(pid)
+                        ok = await pm.stop(pid, session_id=session_id)
                         await websocket.send_json({
                             "type": "process_stopped",
                             "data": {"pid": pid, "success": ok}
@@ -470,7 +472,7 @@ def create_app() -> FastAPI:
             logger.error("ws error: %s: %s", type(e).__name__, e)
         finally:
             if pm:
-                pm.remove_output_callback(on_process_output)
+                pm.remove_output_callback(session_id, on_process_output)
             if agent_task and not agent_task.done():
                 agent_task.cancel()
             logger.info("ws closed  session=%s", session_id)

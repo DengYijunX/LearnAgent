@@ -129,6 +129,7 @@ class LearnQueryEngine:
             plan_mode=(self.permission_mode == "plan"),
         )
 
+        os.environ["LEARNAGENT_SESSION_ID"] = self.session_id
         result = await agent_loop(
             messages=self.messages,
             llm=self.llm,
@@ -256,7 +257,7 @@ class LearnQueryEngine:
                 pm = get_process_manager()
                 if pm is None:
                     return {"type": "command", "content": "进程管理器未启用。"}
-                procs = pm.list_all()
+                procs = pm.list_all(session_id=self.session_id)
                 if not procs:
                     return {"type": "command", "content": "无后台进程。"}
                 lines = ["后台进程："]
@@ -281,7 +282,7 @@ class LearnQueryEngine:
                 pm = get_process_manager()
                 if pm is None:
                     return {"type": "command", "content": "进程管理器未启用。"}
-                ok = await pm.stop(pid)
+                ok = await pm.stop(pid, session_id=self.session_id)
                 if ok:
                     return {"type": "command", "content": f"已停止 PID {pid}。"}
                 return {"type": "command", "content": f"PID {pid} 未找到或已停止。"}

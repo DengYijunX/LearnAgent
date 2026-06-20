@@ -183,8 +183,10 @@ class RunCode(Tool):
             m = self._PORT_RE.search(command)
             if m:
                 port = int(m.group(1))
+            session_id = os.environ.get("LEARNAGENT_SESSION_ID", "")
             try:
-                mp = await pm.start(command, cwd=self._root, port=port)
+                mp = await pm.start(command, cwd=self._root,
+                                   session_id=session_id, port=port)
             except Exception as e:
                 return {"isError": True, "error": f"启动失败：{e}"}
 

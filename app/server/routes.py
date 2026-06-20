@@ -158,21 +158,21 @@ async def get_config():
 # ── 后台进程管理 ──
 
 @router.get("/processes")
-async def list_processes():
+async def list_processes(session_id: str = ""):
     from app.process_manager import get_process_manager
     pm = get_process_manager()
     if pm is None:
         return {"processes": []}
-    return {"processes": pm.list_all()}
+    return {"processes": pm.list_all(session_id=session_id)}
 
 
 @router.post("/processes/{pid}/stop")
-async def stop_process(pid: int):
+async def stop_process(pid: int, session_id: str = ""):
     from app.process_manager import get_process_manager
     pm = get_process_manager()
     if pm is None:
         raise HTTPException(status_code=503, detail="Process manager not available")
-    ok = await pm.stop(pid)
+    ok = await pm.stop(pid, session_id=session_id)
     if not ok:
         raise HTTPException(status_code=404, detail="Process not found or already stopped")
     return {"stopped": True, "pid": pid}

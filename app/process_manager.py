@@ -15,6 +15,7 @@ from typing import Dict, Optional, List
 class ManagedProcess:
     pid: int
     command: str
+    session_id: str = ""
     port: int | None = None
     started_at: float = field(default_factory=time.time)
     status: str = "running"  # running | stopped | error
@@ -49,19 +50,21 @@ class ProcessManager:
     def __init__(self, max_output_lines: int = 200):
         self._processes: Dict[int, ManagedProcess] = {}
         self._max_lines = max_output_lines
-        self._output_callbacks: List[callable] = []
+        # session_id → [callbacks]
+        self._output_callbacks: Dict[str, List[callable]] = {}
 
-    def add_output_callback(self, cb):
-        self._output_callbacks.append(cb)
+    def add_output_callback(self, session_id: str, cb):
+        self._output_callbacks.setdefault(session_id, []).append(cb)
 
-    def remove_output_callback(self, cb):
-        if cb in self._output_callbacks:
-            self._output_callbacks.remove(cb)
+    def remove_output_callback(self, session_id: str, cb):
+        cbs = self._output_callbacks.get(session_id, [])
+        if cb in cbs:
+            cbs.remove(cb)
 
-    async def _broadcast(self, pid: int, port: int | None, line: str):
-        for cb in self._output_callbacks:
+    async def _broadcast(self, mp: ManagedProcess, line: str):
+        for cb in self._output_callbacks.get(mp.session_id, []):
             try:
-                await cb(pid, port, line)
+                await cb(mp.pid, mp.port, line)
             except Exception:
                 pass
 
@@ -69,6 +72,7 @@ class ProcessManager:
         self,
         command: str,
         cwd: str,
+        session_id: str = "",
         port: int | None = None,
     ) -> ManagedProcess:
         """启动后台进程，立即返回。"""
@@ -87,12 +91,12 @@ class ProcessManager:
         mp = ManagedProcess(
             pid=proc.pid,
             command=command,
+            session_id=session_id,
             port=port,
             _process=proc,
         )
         self._processes[proc.pid] = mp
 
-        # 后台任务：逐行读取输出
         mp._stream_task = asyncio.create_task(self._read_stream(mp))
 
         return mp
@@ -113,8 +117,8 @@ class ProcessManager:
                 if len(mp.output_lines) > self._max_lines:
                     mp.output_lines = mp.output_lines[-self._max_lines:]
 
-                # 广播到所有 WebSocket
-                await self._broadcast(mp.pid, mp.port, text)
+                # 广播到同 session 的 WebSocket
+                await self._broadcast(mp, text)
 
             await proc.wait()
             mp.status = "stopped"
@@ -123,11 +127,13 @@ class ProcessManager:
         except Exception:
             mp.status = "error"
 
-    async def stop(self, pid: int) -> bool:
-        """停止指定进程。"""
+    async def stop(self, pid: int, session_id: str = "") -> bool:
+        """停止指定进程（仅限同 session）。session_id="" 表示不受限。"""
         mp = self._processes.get(pid)
         if mp is None or mp.status != "running":
             return False
+        if session_id and mp.session_id != session_id:
+            return False  # 不能跨 session 操作
 
         proc = mp._process
         if proc:
@@ -147,13 +153,15 @@ class ProcessManager:
     def get(self, pid: int) -> Optional[ManagedProcess]:
         return self._processes.get(pid)
 
-    def list_all(self) -> List[dict]:
-        return [mp.to_dict() for mp in self._processes.values()
-                if mp.status == "running"]
+    def list_all(self, session_id: str = "") -> List[dict]:
+        procs = self._processes.values()
+        if session_id:
+            procs = [mp for mp in procs if mp.session_id == session_id]
+        return [mp.to_dict() for mp in procs if mp.status == "running"]
 
-    async def stop_all(self):
+    async def stop_all(self, session_id: str = ""):
         for pid in list(self._processes.keys()):
-            await self.stop(pid)
+            await self.stop(pid, session_id=session_id)
 
 
 # 模块级单例
