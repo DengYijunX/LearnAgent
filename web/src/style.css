@@ -12,14 +12,118 @@
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  color-scheme: light;
+  --canvas: #eef3f9;
+  --surface: rgba(255, 255, 255, 0.82);
+  --surface-strong: rgba(255, 255, 255, 0.94);
+  --surface-soft: rgba(248, 251, 255, 0.68);
+  --line: rgba(117, 139, 171, 0.18);
+  --line-strong: rgba(104, 128, 164, 0.26);
+  --ink: #162136;
+  --ink-secondary: #52627a;
+  --ink-muted: #78869b;
+  --primary: #3978f6;
+  --primary-strong: #2363dd;
+  --primary-soft: rgba(57, 120, 246, 0.1);
+  --success: #249b68;
+  --warning: #c27a16;
+  --danger: #dc5b64;
+  --shadow-glass: 0 24px 70px rgba(52, 72, 104, 0.12), 0 2px 8px rgba(52, 72, 104, 0.05);
 }
 
-/* ── 背景 ── */
+* { box-sizing: border-box; }
+
+html, body, #app { min-width: 1080px; min-height: 100%; }
+
 body {
-  background: #f5f7fb;
-  background-image:
-    radial-gradient(ellipse 80% 60% at 20% 10%, rgba(91, 127, 255, 0.06) 0%, transparent 60%),
-    radial-gradient(ellipse 60% 50% at 80% 90%, rgba(139, 92, 246, 0.04) 0%, transparent 60%);
+  margin: 0;
+  overflow: hidden;
+  background: var(--canvas);
+  color: var(--ink);
+}
+
+button, textarea { font: inherit; }
+button { -webkit-tap-highlight-color: transparent; }
+
+.app-canvas {
+  position: relative;
+  height: 100vh;
+  min-height: 680px;
+  overflow: hidden;
+  padding: 14px;
+  isolation: isolate;
+  background:
+    radial-gradient(circle at 14% -10%, rgba(100, 160, 255, 0.24), transparent 34%),
+    radial-gradient(circle at 88% 112%, rgba(91, 211, 214, 0.18), transparent 31%),
+    linear-gradient(145deg, #f5f8fc 0%, #edf3f9 48%, #e9f0f8 100%);
+}
+
+.app-shell {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.82);
+  border-radius: 24px;
+  background: rgba(250, 252, 255, 0.52);
+  box-shadow: var(--shadow-glass), inset 0 1px 0 rgba(255, 255, 255, 0.92);
+  backdrop-filter: blur(28px) saturate(135%);
+  -webkit-backdrop-filter: blur(28px) saturate(135%);
+}
+
+.ambient-orb {
+  position: absolute;
+  z-index: 0;
+  border-radius: 999px;
+  filter: blur(6px);
+  pointer-events: none;
+}
+.ambient-orb--top {
+  top: -18%;
+  right: 6%;
+  width: 38vw;
+  height: 38vw;
+  background: radial-gradient(circle, rgba(117, 151, 255, 0.18), rgba(117, 151, 255, 0));
+}
+.ambient-orb--bottom {
+  bottom: -24%;
+  left: 18%;
+  width: 42vw;
+  height: 42vw;
+  background: radial-gradient(circle, rgba(71, 208, 206, 0.13), rgba(71, 208, 206, 0));
+}
+.app-noise {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  opacity: 0.025;
+  pointer-events: none;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 140 140' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.55'/%3E%3C/svg%3E");
+}
+
+.glass-panel {
+  border: 1px solid var(--line);
+  background: var(--surface);
+  box-shadow: 0 16px 38px rgba(63, 83, 113, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.86);
+  backdrop-filter: blur(24px) saturate(145%);
+  -webkit-backdrop-filter: blur(24px) saturate(145%);
+}
+
+.glass-control {
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.7);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9), 0 3px 12px rgba(55, 76, 108, 0.05);
+  backdrop-filter: blur(18px) saturate(140%);
+  -webkit-backdrop-filter: blur(18px) saturate(140%);
+}
+
+.focus-ring:focus-visible,
+button:focus-visible,
+textarea:focus-visible {
+  outline: 3px solid rgba(57, 120, 246, 0.2);
+  outline-offset: 2px;
 }
 
 /* ── 代码块 ── */
@@ -66,3 +170,12 @@ body {
   to   { opacity: 1; transform: translateY(0); }
 }
 .animate-fadeIn { animation: fadeIn 0.15s ease-out; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
