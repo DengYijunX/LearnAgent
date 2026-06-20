@@ -138,7 +138,7 @@ def _summarize_val(v, max_len: int = 80) -> str:
         return f"[{len(v)} items]"
     if isinstance(v, dict):
         # dict 优先显示关键字段
-        for key in ("path", "query", "url", "name", "error"):
+        for key in ("path", "query", "url", "name", "error", "command"):
             if key in v:
                 val = str(v[key])[:max_len - len(key) - 10]
                 return f"{key}={val}"

@@ -209,6 +209,8 @@ class RunCode(Tool):
             return result
 
         # 普通模式（当前行为）
+        # 自动去除 storage/workspace/ 前缀（FileWrite 已去，命令里也要去）
+        command = re.sub(r"\bstorage[/\\]workspace[/\\]", "", command)
         try:
             env = os.environ.copy()
             existing = env.get("PYTHONPATH", "")
@@ -232,7 +234,7 @@ class RunCode(Tool):
                 try:
                     stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=5)
                 except asyncio.TimeoutError:
-                    stdout, stderr = b"", b"(process not terminated)".encode()
+                    stdout = b""; stderr = b"(process not terminated)"
                 return {
                     "isError": True,
                     "error": f"命令超时（{self._timeout}s）：{command[:80]}",
@@ -246,14 +248,21 @@ class RunCode(Tool):
                 stdout_str = stdout_str[:self._max_output] + "\n...(输出截断)"
             if len(stderr_str) > self._max_output:
                 stderr_str = stderr_str[:self._max_output] + "\n...(输出截断)"
-            return {
+            result = {
                 "isError": proc.returncode != 0,
                 "stdout": stdout_str,
                 "stderr": stderr_str,
                 "returncode": proc.returncode,
             }
+            # 增强错误信息
+            if proc.returncode != 0 and not stderr_str.strip():
+                result["error"] = f"exit={proc.returncode}  cmd={command[:100]}"
+            elif proc.returncode != 0:
+                result["error"] = f"exit={proc.returncode}  {stderr_str.strip()[:200]}"
+            return result
         except Exception as e:
-            return {"isError": True, "error": f"执行失败：{e}"}
+            logger.warning("run_code 异常: %s  cmd=%s", e, command[:120])
+            return {"isError": True, "error": f"执行失败：{e}  cmd={command[:100]}"}
 
 
 class ListFiles(Tool):
