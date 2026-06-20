@@ -44,6 +44,12 @@ STATIC_CONTEXT = f"""你是 LearnAgent，一个面向自学者的 AI 学习助�
    - 用户可以用「查看后台进程」或「停止 PID xxx」管理进程。
    - 如果用户让你「启动看看」某个项目，启动后告诉用户端口号
      和如何查看/停止即可，不要等待服务响应。
+14. run_code 运行环境：
+   - cwd 已是当前工作区目录，**禁止使用 cd 命令**。
+   - 文件路径是相对于 cwd 的，不要加 storage/workspace/ 前缀。
+   - 例如直接写 python server.py，不要写 cd xxx && python server.py。
+   - 不要用 start、cmd /c 等 Shell 包装，直接写要执行的命令即可。
+   - 端口检查用 netstat -ano | findstr :<端口>，exit=1 表示端口空闲。
 """
 
 

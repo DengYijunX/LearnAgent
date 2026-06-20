@@ -209,8 +209,10 @@ class RunCode(Tool):
             return result
 
         # 普通模式（当前行为）
-        # 自动去除 storage/workspace/ 前缀（FileWrite 已去，命令里也要去）
+        # 自动清理命令中的冗余前缀（cwd 已是 workspace root）
+        command = re.sub(r"\bcd\s+(?:/d\s+)?[\"']?(?:storage[/\\]workspace[/\\])?[\"']?\s*&&\s*", "", command)
         command = re.sub(r"\bstorage[/\\]workspace[/\\]", "", command)
+        command = re.sub(r"\bstart\s+(?:/B|/MIN)\s+", "", command)
         try:
             env = os.environ.copy()
             existing = env.get("PYTHONPATH", "")

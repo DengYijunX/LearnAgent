@@ -176,12 +176,19 @@ def set_process_manager(pm: ProcessManager) -> None:
 
 
 def looks_like_server(command: str) -> bool:
-    """检测命令是否会启动长期服务（Flask/uvicorn/node 等）。"""
+    """检测命令是否会启动长期服务。"""
     cmd = command.lower().replace(" ", "")
     keywords = [
         "app.run", "flaskrun", "uvicorn", "gunicorn",
         "npmstart", "npmrundev", "npxserve", "vite",
-        "python-mhttp.server", "pythonserver.py",
-        "live-server", "nodemon",
+        "python-mhttp.server", "live-server", "nodemon",
+        # 更多 Web 框架
+        "django", "fastapi", "tornado", "aiohttp",
+        "sanic", "bottle", "cherrypy", "pyramid",
+        # python server 模式
+        "python-server.py", "pythonmanage.pyrunserver",
+        "python-mflask", "flask--",
+        # start 系列
+        "start/B", "start/MIN", "start/B",
     ]
     return any(kw in cmd for kw in keywords)
