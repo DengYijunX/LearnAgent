@@ -52,8 +52,12 @@ class FileWrite(Tool):
     RESERVED_NAMES = {"app.py", "main.py"}
 
     async def call(self, tool_input: dict, context: dict | None = None) -> dict:
-        path = tool_input.get("path", "")
-        content = tool_input.get("content", "")
+        path = (tool_input.get("path") or "").strip()
+        content = tool_input.get("content")
+        if not path:
+            return {"isError": True, "error": "缺少 path 参数。请提供要写入文件的路径，如 hello.py"}
+        if content is None:
+            return {"isError": True, "error": "缺少 content 参数。请提供要写入的文件内容"}
         # 自动去除 storage/workspace/ 前缀（LLM 可能被描述误导）
         normalized_input = path.replace("\\", "/").lstrip("./")
         if normalized_input.startswith("storage/workspace/"):
@@ -90,7 +94,9 @@ class FileRead(Tool):
         self._max_len = max_length
 
     async def call(self, tool_input: dict, context: dict | None = None) -> dict:
-        path = tool_input.get("path", "")
+        path = (tool_input.get("path") or "").strip()
+        if not path:
+            return {"isError": True, "error": "缺少 path 参数。请提供要读取文件的路径，如 hello.py"}
         # 自动去除 storage/workspace/ 前缀
         normalized_input = path.replace("\\", "/").lstrip("./")
         if normalized_input.startswith("storage/workspace/"):

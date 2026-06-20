@@ -49,7 +49,7 @@ async def agent_loop(
     llm: LLMClient,
     tools: ToolRegistry,
     system: str | None = None,
-    max_turns: int = 12,
+    max_turns: int = 24,
     ask_callback=None,
     on_event=None,
     permission_mode: str = "default",
