@@ -13,6 +13,7 @@
 """
 
 import functools
+import json
 import logging
 import os
 import sys
@@ -195,6 +196,9 @@ def log_tool(fn):
             else:
                 summary = _summarize_tool_result(tool_name, result)
                 lg.info("🔧 %s  %.1fs  %s", tool_name, elapsed, summary)
+            # DEBUG 级别：完整结果写入日志文件
+            lg.debug("🔧 %s  full_result=%s", tool_name,
+                     json.dumps(result, ensure_ascii=False, default=str)[:2000])
             return result
         except Exception as exc:
             elapsed = time.time() - t0
