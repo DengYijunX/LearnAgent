@@ -38,6 +38,7 @@ export const useSessionStore = defineStore('session', () => {
         messageCount: 0,
         firstMessage: '',
         topic: null,
+        intent: "chat",
         createdAt: result.created_at,
         updatedAt: result.created_at
       }

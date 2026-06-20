@@ -6,6 +6,7 @@ export interface SessionSummary {
   messageCount: number
   firstMessage: string
   topic: string | null
+  intent: string
   createdAt: string
   updatedAt: string
 }

@@ -21,14 +21,11 @@ async function handleCreateSession() {
 </script>
 
 <template>
-  <div class="flex h-screen bg-slate-900 text-white">
-    <!-- 左侧边栏 -->
+  <div class="flex h-screen bg-[#f5f7fb] text-slate-700">
     <AppSidebar
       @select-session="handleSelectSession"
       @create-session="handleCreateSession"
     />
-
-    <!-- 右侧主区域 -->
     <main class="flex-1 flex flex-col overflow-hidden">
       <ChatPanel ref="chatPanelRef" />
     </main>

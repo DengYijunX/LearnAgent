@@ -4,14 +4,65 @@
 
 :root {
   font-family:
-    -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', Helvetica,
-    Arial, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji';
+    -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text",
+    "PingFang SC", "Helvetica Neue", sans-serif;
   line-height: 1.5;
   font-weight: 400;
-
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
 
+/* ── 背景 ── */
+body {
+  background: #f5f7fb;
+  background-image:
+    radial-gradient(ellipse 80% 60% at 20% 10%, rgba(91, 127, 255, 0.06) 0%, transparent 60%),
+    radial-gradient(ellipse 60% 50% at 80% 90%, rgba(139, 92, 246, 0.04) 0%, transparent 60%);
+}
+
+/* ── 代码块 ── */
+.code-block-wrapper {
+  @apply rounded-xl overflow-hidden border border-[#e8ecf1] my-3;
+}
+.code-block-header {
+  @apply flex items-center justify-between px-4 py-2 bg-[#f0f3f8] border-b border-[#e8ecf1] text-xs text-slate-500 font-medium select-none;
+}
+.code-block-header .copy-btn {
+  @apply px-2.5 py-1 rounded-md bg-white/70 text-xs text-slate-500
+         hover:bg-white hover:text-slate-700 transition-colors;
+  border: 1px solid #e8ecf1;
+}
+.code-block-wrapper pre {
+  @apply m-0 p-4 bg-[#fafbfd] overflow-x-auto text-[0.85rem] leading-relaxed;
+}
+
+/* ── highlight.js 浅色主题 ── */
+.hljs { color: #334155; }
+.hljs-comment, .hljs-quote { color: #94a3b8; font-style: italic; }
+.hljs-keyword, .hljs-selector-tag, .hljs-type { color: #7c3aed; }
+.hljs-string, .hljs-regexp { color: #059669; }
+.hljs-number, .hljs-literal { color: #d97706; }
+.hljs-title, .hljs-function, .hljs-section { color: #2563eb; }
+.hljs-built_in, .hljs-name { color: #0891b2; }
+.hljs-attr, .hljs-attribute, .hljs-variable { color: #db2777; }
+.hljs-params { color: #64748b; }
+.hljs-meta { color: #6366f1; }
+.hljs-tag { color: #0f766e; }
+.hljs-symbol { color: #b45309; }
+.hljs-deletion { background: #fef2f2; }
+.hljs-addition { background: #f0fdf4; }
+
+/* ── 滚动条 ── */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #d1d5db; border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: #9ca3af; }
+
+/* ── 动画 ── */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.animate-fadeIn { animation: fadeIn 0.15s ease-out; }

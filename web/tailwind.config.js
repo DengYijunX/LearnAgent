@@ -7,7 +7,22 @@ export default {
     container: {
       center: true,
     },
-    extend: {},
+    extend: {
+      fontFamily: {
+        sans: [
+          '-apple-system', 'BlinkMacSystemFont',
+          '"SF Pro Display"', '"SF Pro Text"',
+          '"PingFang SC"', '"Helvetica Neue"',
+          'sans-serif',
+        ],
+        mono: [
+          '"SF Mono"', '"Fira Code"', '"JetBrains Mono"',
+          'Menlo', 'Consolas', 'monospace',
+        ],
+      },
+    },
   },
-  plugins: [],
+  plugins: [
+    require('@tailwindcss/typography'),
+  ],
 };
