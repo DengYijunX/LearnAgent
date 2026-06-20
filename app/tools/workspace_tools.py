@@ -183,7 +183,11 @@ class RunCode(Tool):
             m = self._PORT_RE.search(command)
             if m:
                 port = int(m.group(1))
-            session_id = os.environ.get("LEARNAGENT_SESSION_ID", "")
+            try:
+                from app.core.session_context import current_session_id
+            except ImportError:
+                current_session_id = None
+            session_id = current_session_id.get() if current_session_id else ""
             try:
                 mp = await pm.start(command, cwd=self._root,
                                    session_id=session_id, port=port)

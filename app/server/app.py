@@ -379,9 +379,9 @@ def create_app() -> FastAPI:
                        session_id, session_intent, session_topic,
                        skill_name or "none", history_count, len(system_prompt))
 
+            from app.core.session_context import current_session_id
+            token = current_session_id.set(session_id)
             try:
-                # 让 RunCode 子进程知道当前 session
-                os.environ["LEARNAGENT_SESSION_ID"] = session_id
                 result = await agent_loop(
                     messages=messages,
                     llm=_llm_client,
@@ -429,6 +429,8 @@ def create_app() -> FastAPI:
                     "type": "error",
                     "data": {"message": str(e)[:300]}
                 })
+            finally:
+                current_session_id.reset(token)
 
         # ── 消息循环（不被 agent_loop 阻塞） ──
         try:

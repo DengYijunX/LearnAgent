@@ -129,31 +129,35 @@ class LearnQueryEngine:
             plan_mode=(self.permission_mode == "plan"),
         )
 
-        os.environ["LEARNAGENT_SESSION_ID"] = self.session_id
-        result = await agent_loop(
-            messages=self.messages,
-            llm=self.llm,
-            tools=self.tools,
-            system=system_prompt,
-            max_turns=8,
-            ask_callback=self._ask_callback if self._ask_callback else None,
-            on_event=self._on_event if self._on_event else None,
-            permission_mode=self.permission_mode,
-        )
+        from app.core.session_context import current_session_id
+        token = current_session_id.set(self.session_id)
+        try:
+            result = await agent_loop(
+                messages=self.messages,
+                llm=self.llm,
+                tools=self.tools,
+                system=system_prompt,
+                max_turns=8,
+                ask_callback=self._ask_callback if self._ask_callback else None,
+                on_event=self._on_event if self._on_event else None,
+                permission_mode=self.permission_mode,
+            )
 
-        if self.session_store:
-            new_msgs = result["messages"][count_before:]
-            for msg in new_msgs:
-                self.session_store.append_message(self.session_id, msg)
+            if self.session_store:
+                new_msgs = result["messages"][count_before:]
+                for msg in new_msgs:
+                    self.session_store.append_message(self.session_id, msg)
 
-        if self.memory_store and intent in ("learn_concept", "analyze_repo", "review"):
-            self._save_topic_memory(topic, intent, result)
+            if self.memory_store and intent in ("learn_concept", "analyze_repo", "review"):
+                self._save_topic_memory(topic, intent, result)
 
-        if topic_msg:
-            result["topic_change"] = topic_msg
+            if topic_msg:
+                result["topic_change"] = topic_msg
 
-        result["_msg_start"] = count_before
-        return result
+            result["_msg_start"] = count_before
+            return result
+        finally:
+            current_session_id.reset(token)
 
     def _save_topic_memory(self, topic: str | None, intent: str, result: dict):
         if not topic:
