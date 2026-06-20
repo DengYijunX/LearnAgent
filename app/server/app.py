@@ -39,7 +39,7 @@ from app.core.agent_loop import agent_loop
 from app.core.llm_router import LLMRouter
 from app.core.query_engine import INTENT_TO_SKILL
 from app.memory.memory_store import MemoryStore
-from app.process_manager import ProcessManager, set_process_manager
+from app.process_manager import ProcessManager, get_process_manager, set_process_manager
 
 
 # 全局变量
