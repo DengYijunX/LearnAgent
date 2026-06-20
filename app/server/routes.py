@@ -153,3 +153,26 @@ async def get_config():
         "storage_dir": cfg.storage_base_dir,
         "api_key_configured": bool(cfg.api_key),
     }
+
+
+# ── 后台进程管理 ──
+
+@router.get("/processes")
+async def list_processes():
+    from app.process_manager import get_process_manager
+    pm = get_process_manager()
+    if pm is None:
+        return {"processes": []}
+    return {"processes": pm.list_all()}
+
+
+@router.post("/processes/{pid}/stop")
+async def stop_process(pid: int):
+    from app.process_manager import get_process_manager
+    pm = get_process_manager()
+    if pm is None:
+        raise HTTPException(status_code=503, detail="Process manager not available")
+    ok = await pm.stop(pid)
+    if not ok:
+        raise HTTPException(status_code=404, detail="Process not found or already stopped")
+    return {"stopped": True, "pid": pid}

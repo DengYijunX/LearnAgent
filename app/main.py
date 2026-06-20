@@ -317,6 +317,13 @@ async def main():
     engine.set_ask_callback(ask_permission)
     engine.set_on_event(on_event)
 
+    # 初始化进程管理器（CLI 和 Web 共用）
+    try:
+        from app.process_manager import ProcessManager, set_process_manager
+        set_process_manager(ProcessManager())
+    except ImportError:
+        pass
+
     # LLM 路由器（替换正则 Router）
     router = LLMRouter(engine.llm) if use_real else None
 

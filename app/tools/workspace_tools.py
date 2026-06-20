@@ -5,9 +5,13 @@ RunCode 有超时和输出截断保护。
 """
 
 import asyncio
+import logging
 import os
+import re
 
 from app.tools.base import Tool
+
+logger = logging.getLogger(__name__)
 
 
 def _safe_path(workspace_root: str, user_path: str) -> str | None:
@@ -161,7 +165,44 @@ class RunCode(Tool):
         )
         return await self._subprocess_exec(docker_cmd)
 
+    _PORT_RE = re.compile(r"(?:port[= ]+|:)(\d{4,5})")
+
     async def _subprocess_exec(self, command: str) -> dict:
+        # 检测是否为服务类命令 → 后台模式
+        try:
+            from app.process_manager import looks_like_server, get_process_manager
+        except ImportError:
+            looks_like_server = lambda c: False
+            get_process_manager = lambda: None
+
+        pm = get_process_manager()
+
+        if looks_like_server(command) and pm is not None:
+            # 后台模式：启动后立即返回，不等待
+            port = None
+            m = self._PORT_RE.search(command)
+            if m:
+                port = int(m.group(1))
+            try:
+                mp = await pm.start(command, cwd=self._root, port=port)
+            except Exception as e:
+                return {"isError": True, "error": f"启动失败：{e}"}
+
+            result = {
+                "isError": False,
+                "pid": mp.pid,
+                "port": port,
+                "is_server": True,
+                "message": f"已后台启动服务 (PID {mp.pid})"
+                          + (f"，端口 {port}" if port else ""),
+                "stop_command": f"taskkill /F /PID {mp.pid}" if os.name == "nt"
+                                else f"kill {mp.pid}",
+            }
+            logger.info("background process started  pid=%d  port=%s  cmd=%s",
+                       mp.pid, port, command[:80])
+            return result
+
+        # 普通模式（当前行为）
         try:
             env = os.environ.copy()
             existing = env.get("PYTHONPATH", "")
@@ -189,6 +230,7 @@ class RunCode(Tool):
                 return {
                     "isError": True,
                     "error": f"命令超时（{self._timeout}s）：{command[:80]}",
+                    "pid": proc.pid,
                     "stdout": stdout.decode("utf-8", errors="replace")[:500],
                     "stderr": stderr.decode("utf-8", errors="replace")[:500],
                 }

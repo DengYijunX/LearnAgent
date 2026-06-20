@@ -39,6 +39,7 @@ from app.core.agent_loop import agent_loop
 from app.core.llm_router import LLMRouter
 from app.core.query_engine import INTENT_TO_SKILL
 from app.memory.memory_store import MemoryStore
+from app.process_manager import ProcessManager, set_process_manager
 
 
 # 全局变量
@@ -102,7 +103,9 @@ async def lifespan(app: FastAPI):
 
     _session_manager = SessionManager()
     _memory_store = MemoryStore(base_dir="storage/memory")
-    logger.info("Session manager + memory store initialized")
+    process_mgr = ProcessManager()
+    set_process_manager(process_mgr)
+    logger.info("Session manager + memory store + process manager initialized")
 
     try:
         _llm_client = _create_llm_client()
@@ -120,6 +123,7 @@ async def lifespan(app: FastAPI):
     _llm_client = None
     _tool_registry = None
     _memory_store = None
+    set_process_manager(None)
 
 
 def create_app() -> FastAPI:
@@ -147,6 +151,20 @@ def create_app() -> FastAPI:
     async def websocket_endpoint(websocket: WebSocket, session_id: str):
         await websocket.accept()
         logger.info("ws connected  session=%s", session_id)
+
+        # 注册进程输出回调
+        async def on_process_output(pid: int, port: int | None, line: str):
+            try:
+                await websocket.send_json({
+                    "type": "process_output",
+                    "data": {"pid": pid, "port": port, "line": line}
+                })
+            except Exception:
+                pass
+
+        pm = get_process_manager()
+        if pm:
+            pm.add_output_callback(on_process_output)
 
         session_mgr = get_session_manager()
         session = await session_mgr.get_session(session_id)
@@ -431,9 +449,28 @@ def create_app() -> FastAPI:
                     mode = msg_data.get("mode", "default")
                     await session_mgr.update_session(session_id, permission_mode=mode)
 
+                elif msg_type == "list_processes":
+                    if pm:
+                        procs = pm.list_all()
+                        await websocket.send_json({
+                            "type": "process_list",
+                            "data": {"processes": procs}
+                        })
+
+                elif msg_type == "stop_process":
+                    pid = msg_data.get("pid")
+                    if pid and pm:
+                        ok = await pm.stop(pid)
+                        await websocket.send_json({
+                            "type": "process_stopped",
+                            "data": {"pid": pid, "success": ok}
+                        })
+
         except Exception as e:
             logger.error("ws error: %s: %s", type(e).__name__, e)
         finally:
+            if pm:
+                pm.remove_output_callback(on_process_output)
             if agent_task and not agent_task.done():
                 agent_task.cancel()
             logger.info("ws closed  session=%s", session_id)
