@@ -64,6 +64,11 @@ def get_tool_registry() -> ToolRegistry:
     return _tool_registry
 
 
+def get_memory_store() -> MemoryStore:
+    assert _memory_store is not None
+    return _memory_store
+
+
 def _create_llm_client() -> DeepSeekLLMClient:
     api_key = os.getenv("DEEPSEEK_API_KEY", "")
     base_url = os.getenv("DEEPSEEK_BASE_URL", "https://api.deepseek.com/v1")

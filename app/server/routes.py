@@ -1,6 +1,6 @@
 """REST API routes for the LearnAgent web server."""
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
 from typing import Optional, List, Dict, Any
 
@@ -74,6 +74,28 @@ def _format_session(session) -> Dict[str, Any]:
     }
 
 
+def _format_todo(todo: Dict[str, Any]) -> Dict[str, Any]:
+    """Return the stable Web Todo shape for CLI and Web-style inputs."""
+    status = todo.get("status", "pending")
+    if status not in {"pending", "in_progress", "completed"}:
+        status = "pending"
+    return {
+        "content": str(todo.get("content", "")).strip(),
+        "active_form": todo.get("active_form", todo.get("activeForm")),
+        "status": status,
+    }
+
+
+def _bounded_memory(item: Dict[str, Any], body_limit: int = 500) -> Dict[str, str]:
+    """Expose only the non-sensitive memory fields with a bounded body."""
+    return {
+        "name": str(item.get("name", "")),
+        "description": str(item.get("description", "")),
+        "type": str(item.get("type", "")),
+        "body": str(item.get("body", ""))[:body_limit],
+    }
+
+
 @router.get("/sessions", response_model=SessionsResponse)
 async def list_sessions():
     from .app import get_session_manager
@@ -106,6 +128,15 @@ async def get_session(session_id: str):
         "permission_mode": session.permission_mode,
         "messages": session.messages,
     }
+
+
+@router.get("/sessions/{session_id}/todos")
+async def get_session_todos(session_id: str):
+    from .app import get_session_manager
+    session = await get_session_manager().get_session(session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+    return {"todos": [_format_todo(todo) for todo in session.todos]}
 
 
 @router.delete("/sessions/{session_id}", response_model=DeleteSessionResponse)
@@ -153,6 +184,17 @@ async def get_config():
         "storage_dir": cfg.storage_base_dir,
         "api_key_configured": bool(cfg.api_key),
     }
+
+
+@router.get("/memories")
+async def list_memories(
+    memory_type: str = Query("learning", alias="type"),
+    limit: int = Query(10, ge=1, le=50),
+):
+    from .app import get_memory_store
+    entries = get_memory_store().list_by_type(memory_type)
+    bounded = [_bounded_memory(entry) for entry in entries[-limit:]]
+    return {"memories": bounded}
 
 
 # ── 后台进程管理 ──

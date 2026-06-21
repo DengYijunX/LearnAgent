@@ -18,6 +18,7 @@ class Session:
     message_count: int = 0
     first_message: str = ""
     messages: List[Dict[str, Any]] = field(default_factory=list)
+    todos: List[Dict[str, Any]] = field(default_factory=list)
 
     def __post_init__(self):
         if self.created_at is None:
@@ -90,6 +91,20 @@ class SessionManager:
             if tool_call_id:
                 message["tool_call_id"] = tool_call_id
             session.messages.append(message)
+            session.updated_at = datetime.now()
+            return session
+
+    async def update_todos(
+        self,
+        session_id: str,
+        todos: List[Dict[str, Any]],
+    ) -> Optional[Session]:
+        """Replace a session's Todo snapshot without retaining caller references."""
+        async with self._lock:
+            session = self._sessions.get(session_id)
+            if not session:
+                return None
+            session.todos = [dict(item) for item in todos]
             session.updated_at = datetime.now()
             return session
 
