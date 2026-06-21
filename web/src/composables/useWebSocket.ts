@@ -2,12 +2,14 @@ import { ref, onUnmounted } from 'vue'
 import { WebSocketClient } from '../api/ws'
 import { useChatStore } from '../stores/chat'
 import { useSessionStore } from '../stores/session'
+import { useContextStore } from '../stores/context'
 import type { WsServerEvent } from '../types/ws'
 import type { Message } from '../types/chat'
 
 export function useWebSocket() {
   const chatStore = useChatStore()
   const sessionStore = useSessionStore()
+  const contextStore = useContextStore()
 
   const client = ref<WebSocketClient | null>(null)
   const isConnecting = ref(false)
@@ -20,9 +22,18 @@ export function useWebSocket() {
     switch (event.type) {
       case 'session_ready':
         sessionStore.setCurrentSession(event.data.session_id)
+        sessionStore.setPermissionMode(event.data.permission_mode)
         if (event.data.topic) {
           sessionStore.setCurrentTopic(event.data.topic)
         }
+        break
+
+      case 'todo_update':
+        contextStore.setTodos(event.data.todos)
+        break
+
+      case 'cancelled':
+        chatStore.setProcessing(false)
         break
 
       case 'thinking':
@@ -236,9 +247,9 @@ export function useWebSocket() {
     }
   }
 
-  function sendCommand(command: string) {
+  function sendSetTopic(topic: string) {
     if (client.value) {
-      client.value.send({ type: 'command', data: { command } })
+      client.value.send({ type: 'set_topic', data: { topic } })
     }
   }
 
@@ -255,6 +266,6 @@ export function useWebSocket() {
     sendPermissionResponse,
     sendCancel,
     sendSetMode,
-    sendCommand
+    sendSetTopic
   }
 }

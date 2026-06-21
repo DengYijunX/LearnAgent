@@ -32,6 +32,27 @@ export interface SessionDetailResponse extends SessionSummaryResponse {
   messages: Message[]
 }
 
+export interface LearningTodo {
+  content: string
+  active_form: string | null
+  status: 'pending' | 'in_progress' | 'completed'
+}
+
+export interface LearningMemory {
+  name: string
+  description: string
+  type: string
+  body: string
+}
+
+export interface RuntimeProcess {
+  pid: number
+  command: string
+  port?: number | null
+  elapsed: number
+  session_id?: string
+}
+
 // 聊天相关类型
 export interface ChatRequest {
   content: string
@@ -76,4 +97,21 @@ export interface DeleteSessionResponse {
 
 export interface ToolsResponse {
   tools: ToolInfo[]
+}
+
+export interface TodosResponse {
+  todos: LearningTodo[]
+}
+
+export interface MemoriesResponse {
+  memories: LearningMemory[]
+}
+
+export interface ProcessesResponse {
+  processes: RuntimeProcess[]
+}
+
+export interface StopProcessResponse {
+  stopped: boolean
+  pid: number
 }

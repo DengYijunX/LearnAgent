@@ -9,7 +9,11 @@ import type {
   ChatResponse,
   ToolsResponse,
   ConfigInfo,
-  ChatRequest
+  ChatRequest,
+  TodosResponse,
+  MemoriesResponse,
+  ProcessesResponse,
+  StopProcessResponse
 } from '../types/api'
 
 const API_BASE = '/api'
@@ -102,5 +106,33 @@ export const configApi = {
   // 获取配置
   async getConfig(): Promise<ConfigInfo> {
     return request<ConfigInfo>('/config')
+  }
+}
+
+export const contextApi = {
+  async getTodos(sessionId: string): Promise<TodosResponse> {
+    return request<TodosResponse>(`/sessions/${sessionId}/todos`)
+  },
+
+  async getMemories(limit = 3): Promise<MemoriesResponse> {
+    return request<MemoriesResponse>(`/memories?type=learning&limit=${limit}`)
+  },
+
+  async getProcesses(sessionId: string): Promise<ProcessesResponse> {
+    return request<ProcessesResponse>(`/processes?session_id=${encodeURIComponent(sessionId)}`)
+  },
+
+  async stopProcess(pid: number, sessionId: string): Promise<StopProcessResponse> {
+    return request<StopProcessResponse>(`/processes/${pid}/stop?session_id=${encodeURIComponent(sessionId)}`, {
+      method: 'POST'
+    })
+  },
+
+  async getConfig(): Promise<ConfigInfo> {
+    return request<ConfigInfo>('/config')
+  },
+
+  async getTools(): Promise<ToolsResponse> {
+    return request<ToolsResponse>('/tools')
   }
 }

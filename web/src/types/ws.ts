@@ -1,4 +1,5 @@
 import type { Message, ToolStatistics } from './chat'
+import type { LearningTodo } from './api'
 
 // 服务端 → 客户端 事件
 export interface WsSessionReady {
@@ -6,7 +7,21 @@ export interface WsSessionReady {
   data: {
     session_id: string
     topic: string | null
-    permission_mode: string
+    permission_mode: 'default' | 'plan'
+  }
+}
+
+export interface WsTodoUpdate {
+  type: 'todo_update'
+  data: {
+    todos: LearningTodo[]
+  }
+}
+
+export interface WsCancelled {
+  type: 'cancelled'
+  data: {
+    cancelled: boolean
   }
 }
 
@@ -120,10 +135,10 @@ export interface WsSetMode {
   }
 }
 
-export interface WsCommand {
-  type: 'command'
+export interface WsSetTopic {
+  type: 'set_topic'
   data: {
-    command: string
+    topic: string
   }
 }
 
@@ -136,6 +151,8 @@ export type WsServerEvent =
   | WsToolEnd
   | WsPermissionRequired
   | WsTopicChange
+  | WsTodoUpdate
+  | WsCancelled
   | WsCompact
   | WsCompleted
   | WsError
@@ -145,4 +162,4 @@ export type WsClientMessage =
   | WsPermissionResponse
   | WsCancel
   | WsSetMode
-  | WsCommand
+  | WsSetTopic
