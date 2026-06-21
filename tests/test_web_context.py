@@ -1,5 +1,7 @@
 """Web 学习上下文接口与协议测试。"""
 
+import asyncio
+
 import pytest
 
 from app.server.session_manager import SessionManager
@@ -64,3 +66,58 @@ def test_format_todo_normalizes_active_form():
         "active_form": "正在读文档",
         "status": "pending",
     }
+
+
+def test_normalise_todos_rejects_invalid_status():
+    from app.server.app import _normalise_todos
+
+    todos = _normalise_todos([{"content": "A", "status": "unknown"}])
+
+    assert todos == [{"content": "A", "active_form": None, "status": "pending"}]
+
+
+@pytest.mark.asyncio
+async def test_cancel_task_waits_for_cancellation():
+    from app.server.app import _cancel_task
+
+    started = asyncio.Event()
+
+    async def worker():
+        started.set()
+        await asyncio.sleep(30)
+
+    task = asyncio.create_task(worker())
+    await started.wait()
+
+    assert await _cancel_task(task) is True
+    assert task.cancelled()
+
+
+@pytest.mark.asyncio
+async def test_todo_tool_publishes_snapshot_through_context():
+    from app.core.session_context import current_todo_callback
+    from app.tools.todo_tools import LearningTodoWrite
+
+    snapshots = []
+
+    async def capture(todos):
+        snapshots.append(todos)
+
+    token = current_todo_callback.set(capture)
+    try:
+        result = await LearningTodoWrite().call(
+            {
+                "todos": [
+                    {
+                        "content": "读文档",
+                        "activeForm": "正在读文档",
+                        "status": "in_progress",
+                    }
+                ]
+            }
+        )
+    finally:
+        current_todo_callback.reset(token)
+
+    assert result["saved"] is True
+    assert snapshots == [result["todos"]]

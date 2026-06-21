@@ -69,6 +69,33 @@ def get_memory_store() -> MemoryStore:
     return _memory_store
 
 
+def _normalise_todos(todos: list[dict]) -> list[dict]:
+    """Normalize untrusted Todo snapshots before storing or sending them."""
+    normalized = []
+    for item in todos:
+        status = item.get("status", "pending")
+        if status not in {"pending", "in_progress", "completed"}:
+            status = "pending"
+        normalized.append({
+            "content": str(item.get("content", "")).strip(),
+            "active_form": item.get("active_form", item.get("activeForm")),
+            "status": status,
+        })
+    return normalized
+
+
+async def _cancel_task(task: asyncio.Task | None) -> bool:
+    """Cancel an active agent task and wait until cancellation is observed."""
+    if task is None or task.done():
+        return False
+    task.cancel()
+    try:
+        await task
+    except asyncio.CancelledError:
+        return True
+    return task.cancelled()
+
+
 def _create_llm_client() -> DeepSeekLLMClient:
     api_key = os.getenv("DEEPSEEK_API_KEY", "")
     base_url = os.getenv("DEEPSEEK_BASE_URL", "https://api.deepseek.com/v1")
@@ -384,8 +411,18 @@ def create_app() -> FastAPI:
                        session_id, session_intent, session_topic,
                        skill_name or "none", history_count, len(system_prompt))
 
-            from app.core.session_context import current_session_id
+            from app.core.session_context import current_session_id, current_todo_callback
+
+            async def publish_todos(todos: list[dict]):
+                snapshot = _normalise_todos(todos)
+                await session_mgr.update_todos(session_id, snapshot)
+                await websocket.send_json({
+                    "type": "todo_update",
+                    "data": {"todos": snapshot},
+                })
+
             token = current_session_id.set(session_id)
+            todo_token = current_todo_callback.set(publish_todos)
             try:
                 result = await agent_loop(
                     messages=messages,
@@ -435,6 +472,7 @@ def create_app() -> FastAPI:
                     "data": {"message": str(e)[:300]}
                 })
             finally:
+                current_todo_callback.reset(todo_token)
                 current_session_id.reset(token)
 
         # ── 消息循环（不被 agent_loop 阻塞） ──
@@ -457,6 +495,27 @@ def create_app() -> FastAPI:
                 elif msg_type == "set_mode":
                     mode = msg_data.get("mode", "default")
                     await session_mgr.update_session(session_id, permission_mode=mode)
+
+                elif msg_type == "set_topic":
+                    topic = str(msg_data.get("topic", "")).strip()
+                    if not topic or any(part in topic for part in ("..", "/", "\\")):
+                        await websocket.send_json({
+                            "type": "error",
+                            "data": {"message": "学习主题不能为空或包含路径字符。", "code": "invalid_topic"},
+                        })
+                        continue
+                    await session_mgr.update_session(session_id, topic=topic)
+                    await websocket.send_json({
+                        "type": "topic_change",
+                        "data": {"message": "学习主题已更新。", "new_topic": topic},
+                    })
+
+                elif msg_type == "cancel":
+                    cancelled = await _cancel_task(agent_task)
+                    await websocket.send_json({
+                        "type": "cancelled",
+                        "data": {"cancelled": cancelled},
+                    })
 
                 elif msg_type == "list_processes":
                     if pm:
