@@ -1,11 +1,14 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { Check, ChevronDown, CircleDot, Compass, LoaderCircle, Sparkles, Wifi, WifiOff, Wrench } from 'lucide-vue-next'
+import { Check, ChevronDown, CircleDot, Compass, LoaderCircle, PanelRightClose, PanelRightOpen, Sparkles, Wifi, WifiOff, Wrench } from 'lucide-vue-next'
 import { useSessionStore } from '../../stores/session'
 import { useChatStore } from '../../stores/chat'
 
+defineProps<{ contextOpen: boolean }>()
+
 const emit = defineEmits<{
   (e: 'toggle-mode'): void
+  (e: 'toggle-context'): void
 }>()
 
 const sessionStore = useSessionStore()
@@ -47,6 +50,19 @@ const toolStats = computed(() => {
           {{ name }} · {{ count }}
         </span>
       </div>
+
+      <button
+        type="button"
+        class="focus-ring glass-control flex cursor-pointer items-center gap-2 rounded-[11px] px-3 py-2 text-[12px] font-semibold text-[var(--ink-secondary)] transition-colors duration-200 hover:bg-white/90"
+        aria-controls="learning-context-panel"
+        :aria-expanded="contextOpen"
+        :aria-label="contextOpen ? '关闭学习上下文' : '打开学习上下文'"
+        @click="emit('toggle-context')"
+      >
+        <PanelRightClose v-if="contextOpen" :size="14" />
+        <PanelRightOpen v-else :size="14" />
+        上下文
+      </button>
 
       <button
         @click="emit('toggle-mode')"

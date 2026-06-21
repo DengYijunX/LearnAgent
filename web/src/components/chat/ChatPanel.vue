@@ -4,12 +4,17 @@ import AppHeader from '../layout/AppHeader.vue'
 import MessageList from './MessageList.vue'
 import ChatInput from './ChatInput.vue'
 import PermissionModal from '../common/PermissionModal.vue'
+import LearningContextPanel from '../context/LearningContextPanel.vue'
 import { useChatStore } from '../../stores/chat'
 import { useSessionStore } from '../../stores/session'
+import { useContextStore } from '../../stores/context'
 import { useWebSocket } from '../../composables/useWebSocket'
+import { useContextPanel } from '../../composables/useContextPanel'
 
 const chatStore = useChatStore()
 const sessionStore = useSessionStore()
+const contextStore = useContextStore()
+const { isOpen, isPinned, isOverlay, toggle, close, togglePinned } = useContextPanel()
 const chatInputRef = ref<InstanceType<typeof ChatInput> | null>(null)
 const {
   connect,
@@ -18,6 +23,7 @@ const {
   sendPermissionResponse,
   sendCancel,
   sendSetMode,
+  sendSetTopic,
   isConnecting
 } = useWebSocket()
 
@@ -39,8 +45,10 @@ onMounted(async () => {
 watch(
   () => sessionStore.currentSessionId,
   async (newId) => {
+    contextStore.clear()
     if (newId) {
       connect(newId)
+      await contextStore.load(newId)
     } else {
       disconnect()
     }
@@ -80,7 +88,7 @@ async function createSession() {
   try {
     const id = await sessionStore.createSession()
     chatStore.clearMessages()
-    connect(id)
+    await contextStore.load(id)
   } catch (e) {
     console.error('Failed to create session:', e)
   }
@@ -127,6 +135,15 @@ function toggleMode() {
   sendSetMode(newMode)
 }
 
+function setTopic(topic: string) {
+  sessionStore.setCurrentTopic(topic)
+  sendSetTopic(topic)
+}
+
+function refreshContext() {
+  if (sessionStore.currentSessionId) contextStore.load(sessionStore.currentSessionId)
+}
+
 // 权限确认
 function handlePermissionConfirm() {
   if (chatStore.pendingPermission) {
@@ -151,33 +168,46 @@ defineExpose({
 </script>
 
 <template>
-  <div class="relative flex h-full min-w-0 flex-col bg-white/20">
-    <!-- 顶部栏 -->
-    <AppHeader @toggle-mode="toggleMode" />
+  <div class="relative flex h-full min-w-0 bg-white/20">
+    <section class="relative flex min-w-0 flex-1 flex-col">
+      <!-- 顶部栏 -->
+      <AppHeader :context-open="isOpen" @toggle-mode="toggleMode" @toggle-context="toggle" />
 
-    <!-- 消息列表 -->
-    <MessageList @select-prompt="handlePromptSelect" />
+      <!-- 消息列表 -->
+      <MessageList @select-prompt="handlePromptSelect" />
 
-    <!-- 输入框 -->
-    <ChatInput
-      ref="chatInputRef"
-      @send="handleSend"
-      @stop="handleStop"
+      <!-- 输入框 -->
+      <ChatInput
+        ref="chatInputRef"
+        @send="handleSend"
+        @stop="handleStop"
+      />
+
+      <!-- 权限确认弹窗 -->
+      <PermissionModal
+        @confirm="handlePermissionConfirm"
+        @deny="handlePermissionDeny"
+      />
+
+      <!-- 连接中指示器 -->
+      <div
+        v-if="isConnecting"
+        class="pointer-events-none absolute left-1/2 top-[76px] z-30 -translate-x-1/2 rounded-full border border-blue-100 bg-white/90 px-3 py-1.5 text-[11px] font-medium text-blue-700 shadow-lg backdrop-blur-xl"
+        role="status"
+      >
+        正在连接会话…
+      </div>
+    </section>
+
+    <LearningContextPanel
+      :open="isOpen"
+      :pinned="isPinned"
+      :overlay="isOverlay"
+      @close="close"
+      @toggle-pin="togglePinned"
+      @refresh="refreshContext"
+      @toggle-mode="toggleMode"
+      @set-topic="setTopic"
     />
-
-    <!-- 权限确认弹窗 -->
-    <PermissionModal
-      @confirm="handlePermissionConfirm"
-      @deny="handlePermissionDeny"
-    />
-
-    <!-- 连接中指示器 -->
-    <div
-      v-if="isConnecting"
-      class="pointer-events-none absolute left-1/2 top-[76px] z-30 -translate-x-1/2 rounded-full border border-blue-100 bg-white/90 px-3 py-1.5 text-[11px] font-medium text-blue-700 shadow-lg backdrop-blur-xl"
-      role="status"
-    >
-      正在连接会话…
-    </div>
   </div>
 </template>

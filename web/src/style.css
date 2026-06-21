@@ -121,9 +121,22 @@ button { -webkit-tap-highlight-color: transparent; }
 
 .focus-ring:focus-visible,
 button:focus-visible,
-textarea:focus-visible {
+textarea:focus-visible,
+input:focus-visible {
   outline: 3px solid rgba(57, 120, 246, 0.2);
   outline-offset: 2px;
+}
+
+@layer components {
+  .context-card {
+    @apply rounded-[16px] border border-white/80 bg-white/60 p-3.5 shadow-[0_8px_24px_rgba(55,78,112,0.055)] backdrop-blur-xl;
+  }
+  .context-card-title-row { @apply flex items-center justify-between gap-2; }
+  .context-card-title { @apply text-[12px] font-semibold tracking-[-0.01em] text-[var(--ink)]; }
+  .context-card-icon { @apply flex h-7 w-7 items-center justify-center rounded-[9px]; }
+  .context-icon-button { @apply focus-ring flex h-7 w-7 shrink-0 cursor-pointer items-center justify-center rounded-[9px] text-[var(--ink-muted)] transition hover:bg-white/90 hover:text-[var(--ink-secondary)]; }
+  .context-empty { @apply mt-3 rounded-[10px] border border-dashed border-slate-200/80 bg-white/35 px-3 py-3 text-[10px] leading-4 text-[var(--ink-muted)]; }
+  .context-error { @apply mt-3 rounded-[10px] bg-red-50/80 px-3 py-2 text-[10px] leading-4 text-red-700; }
 }
 
 /* ── 代码块 ── */
