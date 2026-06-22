@@ -16,11 +16,47 @@ import functools
 import json
 import logging
 import os
+import shutil
 import sys
 import time
 from logging.handlers import TimedRotatingFileHandler
 
 _configured = False
+
+
+# ── Windows-safe rotating handler ──────────────────────────────────────
+
+class WindowsSafeTimedRotatingFileHandler(TimedRotatingFileHandler):
+    """TimedRotatingFileHandler 的 Windows 兼容版本。
+
+    Python 标准库的 TimedRotatingFileHandler 在轮转时使用 os.rename()，
+    这在 Windows 上会失败（PermissionError），如果日志文件正被其他程序打开
+    （如编辑器、tail -f 等）。
+
+    这个子类用「复制内容 + 清空原文件」替代 rename：
+      - 文件名始终不变，外部查看器可以一直开着
+      - 旧日志被复制到带日期后缀的文件中
+    """
+
+    def rotate(self, source: str, dest: str) -> None:
+        """将 source 的内容复制到 dest，然后清空 source."""
+        # 复制旧日志到归档文件
+        try:
+            shutil.copy2(source, dest)
+        except OSError:
+            # 回退到 rename 尝试
+            try:
+                os.rename(source, dest)
+            except OSError:
+                pass  # 轮转失败，但日志写入不受影响
+            return
+
+        # 清空当前日志文件（保持同一个文件句柄，外部查看器不受影响）
+        try:
+            with open(source, "w", encoding="utf-8") as f:
+                f.truncate(0)
+        except OSError:
+            pass
 
 LOG_FORMAT = "%(asctime)s  %(levelname)-7s  [%(name)s]  %(message)s"
 DATE_FORMAT = "%m-%d %H:%M:%S"
@@ -45,7 +81,7 @@ def setup_logging(*, level: int = logging.INFO, log_dir: str = "logs") -> None:
 
     try:
         os.makedirs(log_dir, exist_ok=True)
-        file_handler = TimedRotatingFileHandler(
+        file_handler = WindowsSafeTimedRotatingFileHandler(
             os.path.join(log_dir, "learnagent.log"),
             when="midnight",
             backupCount=7,

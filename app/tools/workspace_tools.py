@@ -296,8 +296,8 @@ class RunCode(Tool):
                 result["error"] = f"exit={proc.returncode}  {stderr_str.strip()[:200]}"
             return result
         except Exception as e:
-            logger.warning("run_code 异常: %s  cmd=%s", e, command[:120])
-            return {"isError": True, "error": f"执行失败：{e}  cmd={command[:100]}"}
+            logger.warning("run_code 异常: %s: %s  cmd=%s", type(e).__name__, e, command[:120])
+            return {"isError": True, "error": f"执行失败 [{type(e).__name__}]：{e}  cmd={command[:100]}"}
 
 
 class ListFiles(Tool):

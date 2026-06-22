@@ -1,5 +1,6 @@
 """上下文构造器 —— 组装 Static Context + Dynamic Context + Skill。"""
 
+from datetime import datetime, timezone, timedelta
 import platform
 
 _PLATFORM_INFO = f"""当前运行平台：{platform.system()}。
@@ -63,6 +64,11 @@ def build_system_prompt(
     parts = [STATIC_CONTEXT]
 
     dynamic = []
+    # 实时注入当前日期（北京时间）
+    cst = timezone(timedelta(hours=8))
+    now = datetime.now(cst).strftime("%Y年%m月%d日 %H:%M")
+    weekday = ["一", "二", "三", "四", "五", "六", "日"][datetime.now(cst).weekday()]
+    dynamic.append(f"当前日期时间：{now}（周{weekday}，北京时间 CST）")
     if current_topic:
         dynamic.append(f"当前学习主题：{current_topic}")
     if intent:

@@ -39,6 +39,7 @@ from app.core.agent_loop import agent_loop
 from app.core.llm_router import LLMRouter
 from app.core.query_engine import INTENT_TO_SKILL
 from app.memory.memory_store import MemoryStore
+from app.memory.session_store import SessionStore
 from app.process_manager import ProcessManager, get_process_manager, set_process_manager
 
 
@@ -133,11 +134,17 @@ def _create_tool_registry() -> ToolRegistry:
 async def lifespan(app: FastAPI):
     global _session_manager, _llm_client, _tool_registry, _memory_store
 
-    _session_manager = SessionManager()
+    _session_store = SessionStore(base_dir="storage/sessions")
+    _session_manager = SessionManager(store=_session_store)
+    migrated = _session_store.migrate_orphan_files()
+    restored = await _session_manager.restore_from_disk()
+    if migrated:
+        logger.info("migrated %d orphan session files", migrated)
     _memory_store = MemoryStore(base_dir="storage/memory")
     process_mgr = ProcessManager()
     set_process_manager(process_mgr)
-    logger.info("Session manager + memory store + process manager initialized")
+    logger.info("Session manager + memory store + process manager initialized"
+                + (f" (restored {restored} sessions)" if restored else ""))
 
     try:
         _llm_client = _create_llm_client()

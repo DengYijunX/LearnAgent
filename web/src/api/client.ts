@@ -79,6 +79,14 @@ export const sessionApi = {
     return request<DeleteSessionResponse>(`/sessions/${id}`, {
       method: 'DELETE'
     })
+  },
+
+  // 重命名会话
+  async renameSession(id: string, topic: string): Promise<{ id: string; topic: string | null }> {
+    return request(`/sessions/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ topic })
+    })
   }
 }
 

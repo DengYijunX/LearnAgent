@@ -147,6 +147,24 @@ async def delete_session(session_id: str):
     return {"deleted": deleted}
 
 
+class RenameSessionRequest(BaseModel):
+    topic: str
+
+
+@router.patch("/sessions/{session_id}")
+async def rename_session(session_id: str, req: RenameSessionRequest):
+    """重命名会话（修改 topic）。"""
+    from .app import get_session_manager
+    session_mgr = get_session_manager()
+    session = await session_mgr.update_session(session_id, topic=req.topic.strip())
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+    return {
+        "id": session.session_id,
+        "topic": session.topic,
+    }
+
+
 @router.post("/chat", response_model=ChatResponse, status_code=202)
 async def send_chat(req: ChatRequest):
     """通过 HTTP 创建会话（实际对话走 WebSocket）。"""

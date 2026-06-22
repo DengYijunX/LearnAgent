@@ -99,6 +99,7 @@ export const useSessionStore = defineStore('session', () => {
     const session = sessions.value.find(s => s.id === id)
     if (session) {
       session.topic = topic
+      session.updatedAt = new Date().toISOString()
     }
     if (currentSessionId.value === id) {
       currentTopic.value = topic
