@@ -1,9 +1,74 @@
 """ReadUrl 工具 —— 读取网页内容。"""
 
+import ipaddress
+import logging
+import os
 import re
+import socket
 from urllib.parse import urljoin, urlparse
 
 from app.tools.base import Tool
+
+logger = logging.getLogger(__name__)
+
+# 禁止访问的地址段（防 SSRF）
+_BLOCKED_CIDRS = [
+    # IPv4
+    ipaddress.ip_network("127.0.0.0/8"),       # loopback
+    ipaddress.ip_network("10.0.0.0/8"),        # private A
+    ipaddress.ip_network("172.16.0.0/12"),     # private B
+    ipaddress.ip_network("192.168.0.0/16"),    # private C
+    ipaddress.ip_network("169.254.0.0/16"),    # link-local / cloud metadata
+    ipaddress.ip_network("0.0.0.0/8"),         # "this" network
+    ipaddress.ip_network("100.64.0.0/10"),     # CGNAT
+    ipaddress.ip_network("198.18.0.0/15"),     # benchmark
+    ipaddress.ip_network("224.0.0.0/4"),       # multicast
+    ipaddress.ip_network("240.0.0.0/4"),       # reserved
+    # IPv6
+    ipaddress.ip_network("::1/128"),           # loopback
+    ipaddress.ip_network("fe80::/10"),         # link-local
+    ipaddress.ip_network("fc00::/7"),          # unique local
+    ipaddress.ip_network("ff00::/8"),          # multicast
+]
+
+
+def _is_safe_url(url: str) -> tuple[bool, str]:
+    """验证 URL 不会访问内网/本地地址。返回 (安全?, 用户友好消息)，
+    内部详情通过 logger 记录。"""
+    try:
+        parsed = urlparse(url)
+        hostname = parsed.hostname
+        if not hostname:
+            return False, "无效的主机名"
+
+        # 先检查是否为 IP 字面量
+        try:
+            addr = ipaddress.ip_address(hostname)
+            for cidr in _BLOCKED_CIDRS:
+                if addr in cidr:
+                    logger.warning("SSRF blocked: %s → %s", url, hostname)
+                    return False, "不允许访问内网地址"
+            return True, ""
+        except ValueError:
+            pass  # 不是 IP，继续 DNS 检查
+
+        # DNS 解析后再次检查
+        resolved = socket.getaddrinfo(hostname, None)
+        for _, _, _, _, sockaddr in resolved:
+            ip = sockaddr[0]
+            addr = ipaddress.ip_address(ip)
+            for cidr in _BLOCKED_CIDRS:
+                if addr in cidr:
+                    logger.warning("SSRF blocked: %s → %s → %s", url, hostname, ip)
+                    return False, "不允许访问内网地址"
+        return True, ""
+
+    except socket.gaierror:
+        logger.info("DNS 解析失败: %s → %s", url, hostname)
+        return False, "无法解析该域名"
+    except Exception as exc:
+        logger.error("URL 安全检查异常: %s → %s: %s", url, hostname, exc)
+        return False, "URL 格式无效"
 
 
 class MockReadUrl(Tool):
@@ -56,23 +121,58 @@ class RealReadUrl(Tool):
         if not url:
             return {"isError": True, "error": "请提供 url 参数。"}
 
+        safe, reason = _is_safe_url(url)
+        if not safe:
+            return {"isError": True, "error": f"安全限制：{reason}"}
+
         try:
             import httpx
 
-            async with httpx.AsyncClient(timeout=self._timeout, follow_redirects=True) as client:
-                response = await client.get(url, headers={
-                    "User-Agent": "Mozilla/5.0 (compatible; LearnAgent/0.2; +https://github.com/DengYijunX/LearnAgent)",
-                    "Accept": "text/html,application/xhtml+xml",
-                })
-                if response.status_code == 403:
-                    response = await client.get(url, headers={
-                        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36",
-                        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-                        "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8",
-                        "Referer": "https://www.google.com/",
+            proxy = os.environ.get("HTTPS_PROXY") or os.environ.get("HTTP_PROXY") or os.environ.get("ALL_PROXY") or ""
+            client_kwargs = {"timeout": self._timeout, "follow_redirects": False}
+            if proxy:
+                client_kwargs["proxy"] = proxy
+
+            async with httpx.AsyncClient(**client_kwargs) as client:
+                # 手动处理重定向，每次跳转都重新验证目标 URL
+                current_url = url
+                for _ in range(5):  # 最多跟 5 次跳转
+                    response = await client.get(current_url, headers={
+                        "User-Agent": "Mozilla/5.0 (compatible; LearnAgent/0.2; +https://github.com/DengYijunX/LearnAgent)",
+                        "Accept": "text/html,application/xhtml+xml",
                     })
-                response.raise_for_status()
-                html = response.text
+                    if response.status_code == 403:
+                        response = await client.get(current_url, headers={
+                            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36",
+                            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+                            "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8",
+                            "Accept-Encoding": "gzip, deflate, br",
+                            "Referer": "https://www.google.com/",
+                            "Cache-Control": "no-cache",
+                            "DNT": "1",
+                        })
+
+                    # 检测重定向
+                    if response.status_code in (301, 302, 303, 307, 308):
+                        loc = response.headers.get("Location")
+                        if not loc:
+                            break
+                        # 处理相对 URL
+                        next_url = urljoin(current_url, loc)
+                        safe, reason = _is_safe_url(next_url)
+                        if not safe:
+                            return {"isError": True, "error": f"安全限制：重定向目标 {reason}"}
+                        current_url = next_url
+                        continue
+
+                    break  # 不是重定向，停止跟跳
+
+                # 提取内容
+                if response.status_code == 403:
+                    html = response.text
+                else:
+                    response.raise_for_status()
+                    html = response.text
 
             text = self._extract_text(html)
             title = self._extract_title(html)

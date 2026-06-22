@@ -36,3 +36,6 @@ Thumbs.db
 .coverage
 htmlcov/
 
+.nezha/
+.claude/
+.codex/

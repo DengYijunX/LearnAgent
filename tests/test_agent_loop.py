@@ -149,7 +149,7 @@ class TestAgentLoop:
         assert result["reason"] == "max_turns"
         final = result["messages"][-1]
         assert final["role"] == "assistant"
-        assert "资料不足" in final["content"]
+        assert "已达到本轮操作上限" in final["content"]
         assert "读取失败" in final["content"]
 
 

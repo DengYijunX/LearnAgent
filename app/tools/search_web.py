@@ -1,6 +1,7 @@
 """SearchWeb 工具 —— 搜索技术资料。"""
 
 from urllib.parse import urlparse
+import os
 
 from app.tools.base import Tool
 
@@ -64,24 +65,39 @@ class RealSearchWeb(Tool):
         try:
             from ddgs import DDGS
 
-            results = []
-            filtered_count = 0
-            with DDGS() as ddgs:
-                for r in ddgs.text(query, max_results=self._max_results):
-                    item = {
-                        "title": r.get("title", ""),
-                        "url": r.get("href", ""),
-                        "snippet": r.get("body", ""),
-                    }
-                    if _is_unsafe_result(item):
-                        filtered_count += 1
-                        continue
-                    results.append(item)
-            return {
-                "results": results,
-                "filtered_count": filtered_count,
-                "isError": False,
-            }
+            proxy = os.environ.get("HTTPS_PROXY") or os.environ.get("HTTP_PROXY") or os.environ.get("ALL_PROXY") or ""
+
+            # 先尝试 auto（DuckDuckGo，质量最好），失败再降级到 mojeek,yandex
+            backends = ["auto", "mojeek,yandex"]
+            last_error = None
+
+            for backend in backends:
+                try:
+                    results = []
+                    filtered_count = 0
+                    with DDGS(proxy=proxy or None, timeout=8) as ddgs:
+                        for r in ddgs.text(query, max_results=self._max_results, backend=backend):
+                            item = {
+                                "title": r.get("title", ""),
+                                "url": r.get("href", ""),
+                                "snippet": r.get("body", ""),
+                            }
+                            if _is_unsafe_result(item):
+                                filtered_count += 1
+                                continue
+                            results.append(item)
+                    if results:
+                        return {
+                            "results": results,
+                            "filtered_count": filtered_count,
+                            "isError": False,
+                        }
+                except Exception as e:
+                    last_error = str(e)
+                    continue  # 当前后端失败，试下一个
+
+            # 所有后端都失败
+            return {"isError": True, "error": f"搜索失败：{last_error}"}
         except Exception as e:
             return {"isError": True, "error": f"搜索失败：{e}"}
 

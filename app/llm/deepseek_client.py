@@ -1,6 +1,7 @@
 import json
 import logging
 from app.llm.base import LLMClient
+from app.logging import log_call
 
 logger = logging.getLogger(__name__)
 
@@ -61,6 +62,7 @@ class DeepSeekLLMClient(LLMClient):
         self._temperature = temperature
         self._max_tokens = max_tokens
 
+    @log_call(label="deepseek.chat")
     async def chat(
         self,
         messages: list[dict],
@@ -98,20 +100,32 @@ class DeepSeekLLMClient(LLMClient):
             for iss in issues:
                 logger.warning("DeepSeek message seq: %s", iss)
 
-        async with httpx.AsyncClient(timeout=60) as client:
-            response = await client.post(
-                f"{self._base_url}/chat/completions",
-                headers=headers,
-                json=payload,
-            )
-            if response.status_code >= 400:
-                try:
-                    err_body = response.json()
-                except Exception:
-                    err_body = response.text
-                raise RuntimeError(f"DeepSeek API error {response.status_code}: {err_body}")
-            data = response.json()
-            return data["choices"][0]["message"]
+        last_error = None
+        for attempt in range(3):
+            try:
+                async with httpx.AsyncClient(timeout=120) as client:
+                    response = await client.post(
+                        f"{self._base_url}/chat/completions",
+                        headers=headers,
+                        json=payload,
+                    )
+                    if response.status_code >= 400:
+                        try:
+                            err_body = response.json()
+                        except Exception:
+                            err_body = response.text
+                        raise RuntimeError(f"DeepSeek API error {response.status_code}: {err_body}")
+                    data = response.json()
+                    return data["choices"][0]["message"]
+            except (httpx.TimeoutException, httpx.ConnectError) as e:
+                last_error = e
+                if attempt < 2:
+                    wait = (attempt + 1) * 2
+                    logger.warning(f"API 请求失败（{type(e).__name__}），{wait}s 后重试 (attempt {attempt + 1}/3)")
+                    import asyncio
+                    await asyncio.sleep(wait)
+                    continue
+                raise RuntimeError(f"API 请求多次失败：{last_error}")
 
     async def stream_chat(
         self,

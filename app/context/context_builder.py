@@ -1,5 +1,6 @@
 """上下文构造器 —— 组装 Static Context + Dynamic Context + Skill。"""
 
+from datetime import datetime, timezone, timedelta
 import platform
 
 _PLATFORM_INFO = f"""当前运行平台：{platform.system()}。
@@ -23,9 +24,34 @@ STATIC_CONTEXT = f"""你是 LearnAgent，一个面向自学者的 AI 学习助�
    这些文件名会与系统冲突。必须使用描述性文件名。
    正确示例：learn_flask.py、flask_demo.py、hello_server.py
 8. 只回答用户最新输入的问题，不要复用旧主题、旧结论或上一轮回答来覆盖新问题。
-9. 如果用户要求阅读“相关网站”“相关链接”“站内相关内容”，必须继续搜索或抽取相关页面；
+9. 如果用户要求阅读”相关网站””相关链接””站内相关内容”，必须继续搜索或抽取相关页面；
    如果只读取了当前页面，不能声称完整阅读了相关网站。
-10. 如果搜索或网页读取没有获得足够可靠资料，必须明确说明资料不足，不能假装确认结论。"""
+10. 如果搜索或网页读取没有获得足够可靠资料，必须明确说明资料不足，不能假装确认结论。
+11. 搜索注意事项：
+   - 每个问题最多搜索 2 次。如果 2 次搜索后仍没有有效信息，立即告诉用户并建议替代方案（如访问官网、打电话）。
+   - 不要反复搜索相同的内容。
+   - 不要用低质量或无关的搜索结果凑内容。
+   - 每次生成最终回复前，检查一下回复是否确实回答了用户的问题。
+   - 如果发现自己生成的回答与问题无关，直接承认无法回答。
+12. 端口规则：
+   - LearnAgent 占用的端口是 8000。
+   - 用户项目的服务端口请使用 5001-5099 范围，不要用 8000。
+   - 启动服务前，先用 netstat -ano | findstr :<端口> 确认端口未被占用。
+   - 如果被占用，换一个端口再试。
+   - 启动服务后，必须告诉用户当前运行在哪个端口、PID 是多少，
+     以及如何停止（Windows: taskkill /F /PID <PID>）。
+13. 后台进程：
+   - 服务类命令会自动在后台启动，不会阻塞对话。
+   - 用户可以用「查看后台进程」或「停止 PID xxx」管理进程。
+   - 如果用户让你「启动看看」某个项目，启动后告诉用户端口号
+     和如何查看/停止即可，不要等待服务响应。
+14. run_code 运行环境：
+   - cwd 已是当前工作区目录，**禁止使用 cd 命令**。
+   - 文件路径是相对于 cwd 的，不要加 storage/workspace/ 前缀。
+   - 例如直接写 python server.py，不要写 cd xxx && python server.py。
+   - 不要用 start、cmd /c 等 Shell 包装，直接写要执行的命令即可。
+   - 端口检查用 netstat -ano | findstr :<端口>，exit=1 表示端口空闲。
+"""
 
 
 def build_system_prompt(
@@ -38,6 +64,11 @@ def build_system_prompt(
     parts = [STATIC_CONTEXT]
 
     dynamic = []
+    # 实时注入当前日期（北京时间）
+    cst = timezone(timedelta(hours=8))
+    now = datetime.now(cst).strftime("%Y年%m月%d日 %H:%M")
+    weekday = ["一", "二", "三", "四", "五", "六", "日"][datetime.now(cst).weekday()]
+    dynamic.append(f"当前日期时间：{now}（周{weekday}，北京时间 CST）")
     if current_topic:
         dynamic.append(f"当前学习主题：{current_topic}")
     if intent:

@@ -1,3 +1,4 @@
+import logging
 import os
 import time
 import uuid
@@ -8,6 +9,8 @@ from app.core.agent_loop import agent_loop
 from app.core.router import topic_distance, normalize_topic
 from app.context.context_builder import build_system_prompt
 from app.context.compaction import compact_messages, estimate_tokens, BUDGET_WARNING
+
+logger = logging.getLogger(__name__)
 
 INTENT_TO_SKILL = {
     "learn_concept": "learn-concept",
@@ -25,6 +28,8 @@ SLASH_COMMANDS = {
     "/model": "显示当前模型信息",
     "/tools": "列出已注册工具",
     "/memory": "查看长期记忆",
+    "/processes": "列出后台进程",
+    "/kill": "停止后台进程 用法：/kill <PID>",
     "/exit": "退出 LearnAgent",
 }
 
@@ -111,8 +116,11 @@ class LearnQueryEngine:
         tokens = estimate_tokens(self.messages)
         if tokens > BUDGET_WARNING:
             self.messages, removed = compact_messages(self.messages)
-            if removed > 0 and self._on_event:
-                await self._on_event("compact", {"removed": removed, "tokens_before": tokens})
+            if removed > 0:
+                logger.info("compacted  %d msgs removed  tokens=%d→%d",
+                           removed, tokens, estimate_tokens(self.messages))
+                if self._on_event:
+                    await self._on_event("compact", {"removed": removed, "tokens_before": tokens})
 
         system_prompt = build_system_prompt(
             current_topic=self.current_topic,
@@ -121,29 +129,35 @@ class LearnQueryEngine:
             plan_mode=(self.permission_mode == "plan"),
         )
 
-        result = await agent_loop(
-            messages=self.messages,
-            llm=self.llm,
-            tools=self.tools,
-            system=system_prompt,
-            max_turns=8,
-            ask_callback=self._ask_callback if self._ask_callback else None,
-            on_event=self._on_event if self._on_event else None,
-            permission_mode=self.permission_mode,
-        )
+        from app.core.session_context import current_session_id
+        token = current_session_id.set(self.session_id)
+        try:
+            result = await agent_loop(
+                messages=self.messages,
+                llm=self.llm,
+                tools=self.tools,
+                system=system_prompt,
+                max_turns=8,
+                ask_callback=self._ask_callback if self._ask_callback else None,
+                on_event=self._on_event if self._on_event else None,
+                permission_mode=self.permission_mode,
+            )
 
-        if self.session_store:
-            new_msgs = result["messages"][count_before:]
-            for msg in new_msgs:
-                self.session_store.append_message(self.session_id, msg)
+            if self.session_store:
+                new_msgs = result["messages"][count_before:]
+                for msg in new_msgs:
+                    self.session_store.append_message(self.session_id, msg)
 
-        if self.memory_store and intent in ("learn_concept", "analyze_repo", "review"):
-            self._save_topic_memory(topic, intent, result)
+            if self.memory_store and intent in ("learn_concept", "analyze_repo", "review"):
+                self._save_topic_memory(topic, intent, result)
 
-        if topic_msg:
-            result["topic_change"] = topic_msg
+            if topic_msg:
+                result["topic_change"] = topic_msg
 
-        return result
+            result["_msg_start"] = count_before
+            return result
+        finally:
+            current_session_id.reset(token)
 
     def _save_topic_memory(self, topic: str | None, intent: str, result: dict):
         if not topic:
@@ -240,6 +254,44 @@ class LearnQueryEngine:
                 return {"type": "command", "content": "已退出计划模式。现在可以执行写入和代码运行操作。"}
             self.permission_mode = "plan"
             return {"type": "command", "content": "已进入计划模式。只允许搜索、阅读等只读操作。确认计划后再次输入 /plan 退出。"}
+
+        if cmd == "/processes":
+            try:
+                from app.process_manager import get_process_manager
+                pm = get_process_manager()
+                if pm is None:
+                    return {"type": "command", "content": "进程管理器未启用。"}
+                procs = pm.list_all(session_id=self.session_id)
+                if not procs:
+                    return {"type": "command", "content": "无后台进程。"}
+                lines = ["后台进程："]
+                for p in procs:
+                    port_info = f" :{p['port']}" if p.get("port") else ""
+                    lines.append(
+                        f"  PID {p['pid']}{port_info}  "
+                        f"运行 {p['elapsed']}s  {p['command'][:60]}"
+                    )
+                lines.append("\n停止: /kill <PID>")
+                return {"type": "command", "content": "\n".join(lines)}
+            except ImportError:
+                return {"type": "command", "content": "进程管理器未启用。"}
+
+        if cmd == "/kill":
+            args = command.strip().split(maxsplit=1)
+            if len(args) < 2:
+                return {"type": "command", "content": "用法：/kill <PID>"}
+            try:
+                pid = int(args[1])
+                from app.process_manager import get_process_manager
+                pm = get_process_manager()
+                if pm is None:
+                    return {"type": "command", "content": "进程管理器未启用。"}
+                ok = await pm.stop(pid, session_id=self.session_id)
+                if ok:
+                    return {"type": "command", "content": f"已停止 PID {pid}。"}
+                return {"type": "command", "content": f"PID {pid} 未找到或已停止。"}
+            except ValueError:
+                return {"type": "command", "content": f"无效 PID：{args[1]}"}
 
         if cmd == "/exit":
             return {"type": "command", "content": "再见！"}
