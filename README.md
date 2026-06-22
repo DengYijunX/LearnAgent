@@ -8,7 +8,45 @@
   <img src="https://img.shields.io/badge/tests-162-green" alt="Tests">
   <img src="https://img.shields.io/badge/frontend-Vue%203%20%2B%20TS-brightgreen" alt="Vue 3">
   <img src="https://img.shields.io/badge/license-MIT-yellow" alt="License">
+  <img src="https://img.shields.io/badge/PRs-welcome-brightgreen" alt="PRs Welcome">
 </p>
+
+<br>
+
+<p align="center">
+  <img src="docs/image.png" alt="LearnAgent Web UI" width="90%" style="border-radius:12px;box-shadow:0_8px_30px_rgba(0,0,0,0.12)">
+</p>
+
+<p align="center">
+  <img src="docs/image1.png" alt="LearnAgent 对话示例" width="90%" style="border-radius:12px;box-shadow:0_8px_30px_rgba(0,0,0,0.12)">
+</p>
+
+---
+
+## 目录
+
+- [为什么用 LearnAgent](#为什么用-learnagent)
+- [这是什么](#这是什么)
+- [快速开始](#快速开始)
+- [核心能力](#核心能力)
+- [运行测试](#运行测试)
+- [架构](#架构)
+- [技术栈](#技术栈)
+- [项目状态](#项目状态)
+
+---
+
+## 为什么用 LearnAgent
+
+| 😵 自学的痛点 | ✅ LearnAgent 怎么解决 |
+|---|---|
+| 搜到一堆过时博文，不知道信哪个 | 自动搜索 + 多源交叉验证，优先官方文档 |
+| 看懂了概念但不会写 | 直接在隔离 workspace 里生成可运行的示例代码 |
+| 学了就忘，缺乏体系 | 持久化学习记忆，按主题追踪进度，随时复盘 |
+| 想分析 GitHub 项目但无从下手 | 自动拉取 README / 目录结构 / 核心模块，摘要输出 |
+| 学习路线不清晰 | LLM Router 诊断意图 → 分层递进拆解 → 生成练习任务 |
+
+**一句话：** 你提问题，LearnAgent 替你搜、替你读、替你跑代码、替你整理笔记。
 
 ---
 
@@ -18,10 +56,10 @@ LearnAgent 是一个**学习任务执行系统**——能主动搜索资料、�
 
 提供 **CLI 终端**和 **Web 界面**两种交互方式，共享同一套 Agent 引擎。
 
-```
-> 我想学习 Flask
+```text
+❯ 我想学习 Flask
 
-  意图: learn_concept · 主题: flask
+  🎯 意图: learn_concept · 主题: flask
 
   📁 新主题：flask
   📂 workspace: storage/workspace/flask
@@ -29,9 +67,9 @@ LearnAgent 是一个**学习任务执行系统**——能主动搜索资料、�
   ✅ 找到 5 条搜索结果 (3.6s)
      · Flask 入门教程 | 菜鸟教程
      · Welcome to Flask — Flask Documentation
-     · Flask Tutorial - GeeksforGeeks
+     · Flask 入门指南 - 思否
 
-  ✅ 读取网页，4530 字符 (3.4s)
+  ✅ 读取网页，4,530 字符 (3.4s)
 
   ✅ 写入文件 learn_flask.py (0.1s)
 
